@@ -1346,7 +1346,7 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
         <xsl:text>%% tcolorbox styles for interactive previews&#xa;</xsl:text>
         <xsl:text>%% changing size= and/or colback can aid in debugging&#xa;</xsl:text>
         <xsl:text>\tcbset{ previewstyle/.style={bwminimalstyle, halign=center} }&#xa;</xsl:text>
-        <xsl:text>\tcbset{ qrstyle/.style={bwminimalstyle, hbox} }&#xa;</xsl:text>
+        <xsl:text>\tcbset{ qrstyle/.style={bwminimalstyle, left=25pt} }&#xa;</xsl:text>
         <xsl:text>\tcbset{ captionstyle/.style={bwminimalstyle, left=1em, width=\linewidth} }&#xa;</xsl:text>
         <!-- Page: https://commons.wikimedia.org/wiki/File:YouTube_Play_Button.svg             -->
         <!-- File: https://upload.wikimedia.org/wikipedia/commons/d/d1/YouTube_Play_Button.svg -->
