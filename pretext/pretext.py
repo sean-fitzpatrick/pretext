@@ -137,18 +137,19 @@ def mathjax_latex(xml_source, pub_file, out_file, dest_dir, math_format):
 #
 ##############################################
 
-def asymptote_conversion(xml_source, pub_file, stringparams, xmlid_root, dest_dir, outformat):
+def asymptote_conversion(xml_source, pub_file, stringparams, xmlid_root, dest_dir, outformat, method):
     """Extract asymptote code for diagrams and convert to graphics formats"""
     # stringparams is a dictionary, best for lxml parsing
+    # method == 'local': use a system executable from pretext.cfg
+    # method == 'server': hit a server at U of Alberta, Asymptote HQ
     import os.path # join()
     import os, subprocess, shutil, glob
+    import requests # post()
 
-    _verbose('converting Asymptote diagrams from {} to {} graphics for placement in {}'.format(xml_source, outformat.upper(), dest_dir))
+    msg = 'converting Asymptote diagrams from {} to {} graphics for placement in {} with method "{}"'
+    _verbose(msg.format(xml_source, outformat.upper(), dest_dir, method))
     tmp_dir = get_temporary_directory()
     _debug("temporary directory: {}".format(tmp_dir))
-    asy_executable_cmd = get_executable_cmd('asy')
-    # TODO why this debug line? get_executable_cmd() outputs the same debug info
-    _debug("asy executable: {}".format(asy_executable_cmd[0]))
     ptx_xsl_dir = get_ptx_xsl_path()
     extraction_xslt = os.path.join(ptx_xsl_dir, 'extract-asymptote.xsl')
     # support publisher file, subtree argument
@@ -164,44 +165,62 @@ def asymptote_conversion(xml_source, pub_file, stringparams, xmlid_root, dest_di
     # Resulting *.asy files are in tmp_dir, switch there to work
     os.chdir(tmp_dir)
     devnull = open(os.devnull, 'w')
-    # perhaps replace following stock advisory with a real version
-    # check using the (undocumented) distutils.version module, see:
-    # https://stackoverflow.com/questions/11887762/how-do-i-compare-version-numbers-in-python
-    proc = subprocess.Popen([asy_executable_cmd[0], '--version'], stderr=subprocess.PIPE)
-    # bytes -> ASCII, strip final newline
-    asyversion = proc.stderr.read().decode('ascii')[:-1]
     # simply copy for source file output
+    # no need to check executable or server, PreTeXt XSL does it all
     if outformat == 'source':
         for asydiagram in os.listdir(tmp_dir):
             _verbose("copying source file {}".format(asydiagram))
             shutil.copy2(asydiagram, dest_dir)
-    # consolidated process for four possible output formats
+    # consolidated process for five possible output formats
+    # parameterized for places where  method  differs
     if outformat in ['html', 'svg', 'png', 'pdf', 'eps']:
-        # build command line to suit
-        asy_cli = asy_executable_cmd + ['-f', outformat]
-        if outformat in ['pdf', 'eps']:
-            asy_cli += ['-noprc', '-iconify', '-tex', 'xelatex', '-batchMask']
-        elif outformat in ['svg', 'png']:
-            asy_cli += ['-render=4', '-tex', 'xelatex', '-iconify']
+        # setup, depending on the method
+        if method == 'local':
+            asy_executable_cmd = get_executable_cmd('asy')
+            # perhaps replace following stock advisory with a real version
+            # check using the (undocumented) distutils.version module, see:
+            # https://stackoverflow.com/questions/11887762/how-do-i-compare-version-numbers-in-python
+            proc = subprocess.Popen([asy_executable_cmd[0], '--version'], stderr=subprocess.PIPE)
+            # bytes -> ASCII, strip final newline
+            asyversion = proc.stderr.read().decode('ascii')[:-1]
+            # build command line to suit
+            asy_cli = asy_executable_cmd + ['-f', outformat]
+            if outformat in ['pdf', 'eps']:
+                asy_cli += ['-noprc', '-iconify', '-tex', 'xelatex', '-batchMask']
+            elif outformat in ['svg', 'png']:
+                asy_cli += ['-render=4', '-tex', 'xelatex', '-iconify']
+        if method == 'server':
+            alberta = 'http://asymptote.ualberta.ca:10007?f={}'.format(outformat)
         # loop over files, doing conversions
         for asydiagram in os.listdir(tmp_dir):
             filebase, _ = os.path.splitext(asydiagram)
             asyout = "{}.{}".format(filebase, outformat)
-            asy_cmd = asy_cli + [asydiagram]
             _verbose("converting {} to {}".format(asydiagram, asyout))
-            _debug("asymptote conversion {}".format(asy_cmd))
-            subprocess.call(asy_cmd, stdout=devnull, stderr=subprocess.STDOUT)
+            # do the work, depending on method
+            if method == 'local':
+                asy_cmd = asy_cli + [asydiagram]
+                _debug("asymptote conversion {}".format(asy_cmd))
+                subprocess.call(asy_cmd, stdout=devnull, stderr=subprocess.STDOUT)
+            if method == 'server':
+                _debug("asymptote server query {}".format(alberta))
+                with open(asydiagram) as f:
+                    data = f.read()
+                    response = requests.post(url=alberta,data=data)
+                    open(asyout, 'wb').write(response.content)
+            # copy resulting image file, or warn/advise about failure
             if os.path.exists(asyout):
                 shutil.copy2(asyout, dest_dir)
             else:
                 msg = [
                 'PTX:WARNING: the Asymptote output {} was not built'.format(asyout),
-                '             1. Perhaps your code has errors (try testing in the Asymptote web app).',
-                '             2. Or your copy of Asymtote may precede version 2.66 that we expect.',
-                '                Not every image can be built in every possible format.',
-                '',
-                '                Your Asymptote reports its version within the following:',
-                '                {}'.format(asyversion)]
+                '             Perhaps your code has errors (try testing in the Asymptote web app).']
+                if method == 'local':
+                    msg += [
+                    '             Or your local copy of Asymtote may precede version 2.66 that we expect.',
+                    '             In this case, not every image can be built in every possible format.',
+                    '',
+                    '             Your Asymptote reports its version within the following:',
+                    '             {}'.format(asyversion)]
                 print('\n'.join(msg))
 
 
@@ -241,7 +260,7 @@ def sage_conversion(xml_source, pub_file, stringparams, xmlid_root, dest_dir, ou
             for f in glob.glob(sagepng):
                 shutil.copy2(f, dest_dir)
 
-def latex_image_conversion(xml_source, pub_file, stringparams, xmlid_root, data_dir, dest_dir, outformat):
+def latex_image_conversion(xml_source, pub_file, stringparams, xmlid_root, dest_dir, outformat):
     # stringparams is a dictionary, best for lxml parsing
     import platform # system, machine()
     import os.path # join()
@@ -253,9 +272,6 @@ def latex_image_conversion(xml_source, pub_file, stringparams, xmlid_root, data_
     devnull = open(os.devnull, 'w')
     tmp_dir = get_temporary_directory()
     _debug("temporary directory for latex-image conversion: {}".format(tmp_dir))
-    # NB: next command uses relative paths, so no chdir(), etc beforehand
-    if data_dir:
-        copy_data_directory(xml_source, data_dir, tmp_dir)
     ptx_xsl_dir = get_ptx_xsl_path()
     _verbose("extracting latex-image pictures from {}".format(xml_source))
     # support publisher file, subtree argument
@@ -264,6 +280,14 @@ def latex_image_conversion(xml_source, pub_file, stringparams, xmlid_root, data_
     if xmlid_root:
         stringparams['subtree'] = xmlid_root
     _verbose('string parameters passed to extraction stylesheet: {}'.format(stringparams))
+    # Need to copy entire external directory in the managed case.
+    # Making data files available for latex image compilation is
+    # not supported outside of the managed directory scheme (2021-07-28)
+    _, external_dir = get_managed_directories(xml_source, pub_file)
+    if external_dir:
+        external_dest = os.path.join(tmp_dir, 'external')
+        shutil.copytree(external_dir, external_dest)
+    # now create all the standalone LaTeX source files
     extraction_xslt = os.path.join(ptx_xsl_dir, 'extract-latex-image.xsl')
     # no output (argument 3), stylesheet writes out per-image file
     xsltproc(extraction_xslt, xml_source, None, tmp_dir, stringparams)
@@ -340,9 +364,10 @@ def latex_image_conversion(xml_source, pub_file, stringparams, xmlid_root, data_
 #
 #######################
 
-def latex_tactile_image_conversion(xml_source, pub_file, stringparams, data_dir, dest_dir, outformat):
+def latex_tactile_image_conversion(xml_source, pub_file, stringparams, dest_dir, outformat):
     import os # .chdir()
     import os.path # join()
+    import shutil # copytree()
     import subprocess # run() is Python 3.5 (run() is preferable to call())
     import lxml.etree as ET
 
@@ -417,6 +442,14 @@ def latex_tactile_image_conversion(xml_source, pub_file, stringparams, data_dir,
     extraction_params = stringparams
     extraction_params['format'] = 'tactile'
     extraction_params['labelfile'] = braille_label_file
+    # Need to copy entire external directory in the managed case.
+    # Making data files available for latex image compilation is
+    # not supported outside of the managed directory scheme (2021-07-28)
+    _, external_dir = get_managed_directories(xml_source, pub_file)
+    if external_dir:
+        external_dest = os.path.join(tmp_dir, 'external')
+        shutil.copytree(external_dir, external_dest)
+    # now create all the standalone LaTeX source files
     extraction_xslt = os.path.join(ptx_xsl_dir, 'extract-latex-image.xsl')
     # Output is multiple *.tex files
     xsltproc(extraction_xslt, xml_source, None, tmp_dir, extraction_params)
@@ -1166,7 +1199,8 @@ def all_images(xml, pub_file, stringparams, xmlid_root):
         msg = ' '.join(["creating all images requires a directory specification",
                         "in a publisher file, and no publisher file has been given"])
         raise ValueError(msg)
-    generated_dir, data_dir, _, _, _, _ = get_image_directories(xml, pub_file)
+    generated_dir, _ = get_managed_directories(xml, pub_file)
+
     # correct attribute and not a directory gets caught earlier
     # but could have publisher file and bad elements/attributes
     if not(generated_dir):
@@ -1185,8 +1219,8 @@ def all_images(xml, pub_file, stringparams, xmlid_root):
         # make directory if not already present
         if not(os.path.isdir(dest_dir)):
             os.mkdir(dest_dir)
-        latex_image_conversion(xml, pub_file, stringparams, xmlid_root, data_dir, dest_dir, 'pdf')
-        latex_image_conversion(xml, pub_file, stringparams, xmlid_root, data_dir, dest_dir, 'svg')
+        latex_image_conversion(xml, pub_file, stringparams, xmlid_root, dest_dir, 'pdf')
+        latex_image_conversion(xml, pub_file, stringparams, xmlid_root, dest_dir, 'svg')
 
     # Asymptote
     #
@@ -1388,6 +1422,7 @@ def epub(xml_source, pub_file, out_file, dest_dir, math_format, stringparams):
     # the EPUB production is parmameterized by how math is produced
     params['mathfile'] = math_representations
     params['math.format'] = math_format
+    params['tmpdir'] = tmp_dir
     if pub_file:
         params['publisher'] = pub_file
     xsltproc(epub_xslt, xml_source, packaging_file, tmp_dir, {**params, **stringparams})
@@ -1450,10 +1485,10 @@ def epub(xml_source, pub_file, out_file, dest_dir, math_format, stringparams):
     shutil.copy2(cover_source, cover_dest)
 
     # position image files
-    images = packaging_tree.xpath('/packaging/images/image/@filename')
+    images = packaging_tree.xpath('/packaging/images/image[@filename]')
     for im in images:
-        source = os.path.join(source_dir, str(im))
-        dest = os.path.join(xhtml_dir, str(im))
+        source = os.path.join(source_dir, str(im.get('sourcename')))
+        dest = os.path.join(xhtml_dir, str(im.get('filename')))
         os.makedirs(os.path.dirname(dest), exist_ok=True)
         shutil.copy2(source, dest)
 
@@ -1517,21 +1552,20 @@ def html(xml, pub_file, stringparams, dest_dir):
     import shutil # copytree()
 
     # Consult publisher file for locations of images
-    # data directory likely only needed for latex compilation
-    generated_abs, _, external_abs, generated, _, external = get_image_directories(xml, pub_file)
+    generated_abs, external_abs = get_managed_directories(xml, pub_file)
 
     # support publisher file, not subtree argument
     if pub_file:
         stringparams['publisher'] = pub_file
     extraction_xslt = os.path.join(get_ptx_xsl_path(), 'pretext-html.xsl')
 
-    # copy externally manufactured media to  dest_dir
-    if external:
+    # copy externally manufactured files to  dest_dir
+    if external_abs:
         external_dir = os.path.join(dest_dir, 'external')
         shutil.copytree(external_abs, external_dir)
 
     # copy generated to  dest_dir
-    if generated:
+    if generated_abs:
         generated_dir = os.path.join(dest_dir, 'generated')
         shutil.copytree(generated_abs, generated_dir)
 
@@ -1571,7 +1605,7 @@ def pdf(xml, pub_file, stringparams, out_file, dest_dir):
     import shutil # copytree(), copy2()
     import subprocess # run()
 
-    generated_abs, data_abs, external_abs, generated, data, external = get_image_directories(xml, pub_file)
+    generated_abs, external_abs = get_managed_directories(xml, pub_file)
     # perhaps necessary (so drop "if"), but maybe not; needs to be supported
     if pub_file:
         stringparams['publisher'] = pub_file
@@ -1596,17 +1630,13 @@ def pdf(xml, pub_file, stringparams, out_file, dest_dir):
     # (an empty string is impossible due to a slash always being present?)
 
     # Managed, generated images
-    if generated:
+    if generated_abs:
         generated_dir = os.path.join(tmp_dir, 'generated')
         shutil.copytree(generated_abs, generated_dir)
     # externally manufactured images
-    if external:
+    if external_abs:
         external_dir = os.path.join(tmp_dir, 'external')
         shutil.copytree(external_abs, external_dir)
-    # data files
-    if data:
-        data_dir = os.path.join(tmp_dir, 'data')
-        shutil.copytree(data_abs, data_dir)
 
     # now work in temporary directory since LaTeX is a bit incapable
     # of working outside of the current working directory
@@ -1872,19 +1902,6 @@ def sanitize_alpha_num_underscore(param):
         raise ValueError('PTX:ERROR: param {} contains characters other than a-zA-Z0-9_ '.format(param))
     return param
 
-def copy_data_directory(source_file, data_dir, tmp_dir):
-    """Stage directory from CLI argument into the working directory"""
-    import os.path, shutil
-
-    # Assumes all input paths are absolute, and that
-    # data_dir is one step longer than directory for source_file,
-    # in other words, data directory is a peer of source file
-    _verbose("formulating data directory location")
-    source_full_path, _ = os.path.split(source_file)
-    destination_root = os.path.join(tmp_dir, 'data')
-    _debug("copying data directory {} to working location {}".format(data_dir, destination_root))
-    shutil.copytree(data_dir, destination_root)
-
 def get_temporary_directory():
     """Create, record, and return a scratch directory"""
     import tempfile #  mkdtemp()
@@ -1934,8 +1951,8 @@ def verify_input_directory(inputdir):
     _verbose('input directory expanded to absolute path: {}'.format(absdir))
     return absdir
 
-def get_image_directories(xml_source, pub_file):
-    """Returns triple: (generated, data, external) absolute paths, derived from publisher file"""
+def get_managed_directories(xml_source, pub_file):
+    """Returns pair: (generated, external) absolute paths, derived from publisher file"""
     import os.path # isabs, split
     import lxml.etree as ET  # XML source
 
@@ -1945,18 +1962,13 @@ def get_image_directories(xml_source, pub_file):
     # Examine /publication/source/directories element carefully
     # for attributes which we code here for convenience
     gen_attr = 'generated'
-    data_attr = 'data'
     ext_attr = 'external'
 
     # prepare for relative paths later
     source_dir = get_source_path(xml_source)
 
     # Unknown until running the gauntlet
-    generated_abs = None
-    data_abs = None
-    external_abs = None
     generated = None
-    data = None
     external = None
     if pub_file:
         # parse publisher file, xinclude is conceivable
@@ -1979,17 +1991,7 @@ def get_image_directories(xml_source, pub_file):
                     raise ValueError(abs_path_error.format(gen_attr, raw_path))
                 else:
                     abs_path = os.path.join(source_dir, raw_path)
-                generated = raw_path
-                generated_abs = verify_input_directory(abs_path)
-            # attribute absent => None
-            if data_attr in attributes_dict.keys():
-                raw_path = attributes_dict[data_attr]
-                if os.path.isabs(raw_path):
-                    raise ValueError(abs_path_error.format(data_attr, raw_path))
-                else:
-                    abs_path = os.path.join(source_dir, raw_path)
-                data = raw_path
-                data_abs = verify_input_directory(abs_path)
+                generated = verify_input_directory(abs_path)
             # attribute absent => None
             if ext_attr in attributes_dict.keys():
                 raw_path = attributes_dict[ext_attr]
@@ -1997,10 +1999,9 @@ def get_image_directories(xml_source, pub_file):
                     raise ValueError(abs_path_error.format(ext_attr, raw_path))
                 else:
                     abs_path = os.path.join(source_dir, raw_path)
-                external = raw_path
-                external_abs = verify_input_directory(abs_path)
-    # triple of discovered paths
-    return (generated_abs, data_abs, external_abs, generated, data, external)
+                external = verify_input_directory(abs_path)
+    # pair of discovered absolute paths
+    return (generated, external)
 
 
 ########

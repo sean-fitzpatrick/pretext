@@ -92,6 +92,7 @@
 <!-- XHTML files as output -->
 <xsl:variable name="file-extension" select="'.xhtml'" />
 
+<xsl:param name="tmpdir"/>
 <xsl:param name="mathfile"/>
 <xsl:variable name="math-repr" select="document($mathfile)/pi:math-representations"/>
 
@@ -123,7 +124,6 @@
 
 <!-- Cover image filename, once -->
 <xsl:variable name="cover-filename">
-    <xsl:value-of select="$external-directory"/>
     <xsl:value-of select="$publication/epub/@cover"/>
 </xsl:variable>
 
@@ -192,9 +192,9 @@
     <!-- Following should use $root or $document-root as defined -->
     <!-- by the "assembly" template.  Checked 2020-07-16.        -->
     <xsl:call-template name="setup" />
+    <xsl:apply-templates select="$root"/>
     <xsl:call-template name="package-document" />
     <xsl:call-template name="packaging-info"/>
-    <xsl:apply-templates select="$root"/>
 </xsl:template>
 
 <!-- First, we use the frontmatter element to trigger various necessary files     -->
@@ -245,20 +245,7 @@
                 <xsl:call-template name="mathjax-css"/>
                 <xsl:call-template name="epub-kindle-css"/>
                 <title>
-                    <xsl:choose>
-                        <!-- make sure hacked-in "conclusion" and "outcomes"  -->
-                        <!-- get *some sort* of title, this could be improved -->
-                        <!-- by testing them for a "title" element            -->
-                        <xsl:when test="self::conclusion">
-                            <xsl:text>Conclusion</xsl:text>
-                        </xsl:when>
-                        <xsl:when test="self::outcomes">
-                            <xsl:text>Outcomes</xsl:text>
-                        </xsl:when>
-                        <xsl:otherwise>
-                            <xsl:apply-templates select="." mode="title-short"/>
-                        </xsl:otherwise>
-                    </xsl:choose>
+                    <xsl:apply-templates select="." mode="type-name-number" />
                 </title>
             </head>
             <!-- use class to repurpose HTML CSS work -->
@@ -305,7 +292,6 @@
         <xsl:apply-templates select="." mode="section-header" />
         <xsl:apply-templates select="author|objectives|introduction|titlepage|abstract" />
         <!-- deleted "nav" and summary links here -->
-        <!-- "conclusion" is being missed here    -->
     </section>
     <xsl:if test="conclusion">
         <xsl:apply-templates select="conclusion" mode="file-wrap">
@@ -450,9 +436,48 @@
             </xsl:otherwise>
         </xsl:choose>
         <item id="cover-page" href="{$xhtml-dir}/cover-page.xhtml" media-type="application/xhtml+xml"/>
-        <item id="table-contents" href="{$xhtml-dir}/table-contents.xhtml" properties="nav" media-type="application/xhtml+xml"/>
-        <item id="cover-image" href="{$xhtml-dir}/{$cover-filename}" properties="cover-image" media-type="image/png"/>
-
+        <item id="table-contents"
+              href="{$xhtml-dir}/table-contents.xhtml"
+              media-type="application/xhtml+xml">
+            <!-- TODO: If the TOC expands to include more than -->
+            <!-- chapter and appendix, this will need revision. -->
+            <xsl:attribute name="properties">
+                <xsl:choose>
+                    <xsl:when test="$document-root//chapter/title/m or
+                                    $document-root//appendix/title/m">
+                        <xsl:choose>
+                            <xsl:when test="$math.format = 'mml' or
+                                            $math.format = 'kindle'">
+                                <xsl:text>nav mathml</xsl:text>
+                            </xsl:when>
+                            <xsl:when test="$math.format = 'svg'">
+                                <xsl:text>nav svg</xsl:text>
+                            </xsl:when>
+                        </xsl:choose>
+                    </xsl:when>
+                    <xsl:otherwise>
+                        <xsl:text>nav</xsl:text>
+                    </xsl:otherwise>
+                </xsl:choose>
+            </xsl:attribute>
+        </item>
+        <item id="cover-image" href="{$xhtml-dir}/{$cover-filename}" properties="cover-image">
+            <xsl:attribute name="media-type">
+                <xsl:variable name="extension">
+                    <xsl:call-template name="file-extension">
+                        <xsl:with-param name="filename" select="$cover-filename" />
+                    </xsl:call-template>
+                </xsl:variable>
+                <xsl:choose>
+                    <xsl:when test="$extension='png'">
+                        <xsl:text>image/png</xsl:text>
+                    </xsl:when>
+                    <xsl:when test="$extension='jpeg' or $extension='jpg'">
+                        <xsl:text>image/jpeg</xsl:text>
+                    </xsl:when>
+                </xsl:choose>
+            </xsl:attribute>
+        </item>
         <!-- cruise found objects, including comments we generate to help debug       -->
         <!-- NB: * could be just "item", but we generally want all elements           -->
         <!-- Strategy: compare @href of each candidate item with the @href of each    -->
@@ -497,7 +522,10 @@
 <!-- recurse into contents for image files, etc    -->
 <!-- See "Core Media Type Resources"               -->
 <!-- Add to spine identically                      -->
-<xsl:template match="frontmatter|colophon|acknowledgement|preface|biography|chapter|chapter/conclusion|chapter/outcomes[preceding-sibling::section]|appendix|index|section|exercises|references|solutions" mode="manifest">
+<!-- Specialized divisions are terminal in back    -->
+<!-- matter, and only a seperate file when within  -->
+<!-- a "chapter", at level 2                       -->
+<xsl:template match="frontmatter|colophon|biography|dedication|acknowledgement|preface|chapter|chapter/conclusion|chapter/outcomes[preceding-sibling::section]|appendix|index|section|exercises|chapter/solutions|appendix/solutions|backmatter/solutions|chapter/references|appendix/references|backmatter/references" mode="manifest">
     <!-- Annotate manifest entries -->
     <xsl:comment>
         <xsl:apply-templates select="." mode="long-name" />
@@ -514,46 +542,26 @@
         <!-- Processing with page2svg makes it appear SVG images exist -->
         <!-- Set properties="svg" or properties="mathml" when a -->
         <!-- file contains math in one of thse formats. -->
-        <xsl:variable name="is-structured">
-            <xsl:apply-templates select="." mode="is-structured-division"/>
-        </xsl:variable>
-        <xsl:variable name="b-is-structured" select="$is-structured = 'true'"/>
-
+        <!-- There are simply too many edge cases to do this -->
+        <!-- based on document structure alone, so read the actual -->
+        <!-- XHTML files we've already written and look for svg -->
+        <!-- or math tags in them. -->
         <xsl:variable name="has-math">
+            <xsl:variable name="contents-filename">
+                <xsl:value-of select="$tmpdir" />
+                <xsl:text>/</xsl:text>
+                <xsl:value-of select="$content-dir" />
+                <xsl:text>/</xsl:text>
+                <xsl:value-of select="$xhtml-dir" />
+                <xsl:text>/</xsl:text>
+                <xsl:apply-templates select="."
+                                     mode="containing-filename"/>
+            </xsl:variable>
+            <xsl:variable name="filedata"
+                          select="document($contents-filename)"/>
             <xsl:choose>
-                <xsl:when test="self::frontmatter">
-                    <xsl:text>false</xsl:text>
-                </xsl:when>
-                <!-- TODO: Condition more on exercises in case -->
-                <!-- answer/solution is suppressed. -->
-                <xsl:when test="../section or ../preface or ../exercises">
-                    <xsl:if test=".//m or .//me or .//men or .//md or .//mdn">
-                        <xsl:text>true</xsl:text>
-                    </xsl:if>
-                </xsl:when>
-                <xsl:when test=".//notation-list">
+                <xsl:when test="$filedata//svg:svg|$filedata//math:math">
                     <xsl:text>true</xsl:text>
-                </xsl:when>
-                <xsl:when test="index-list and $document-root//idx//m">
-                    <xsl:text>true</xsl:text>
-                </xsl:when>
-                <xsl:when test="../chapter or ../appendix">
-                    <xsl:choose>
-                        <xsl:when test="$b-is-structured">
-                            <xsl:if test="chapter/title|objectives|introduction//m or
-                                          chapter/title|objectives|introduction//me or
-                                          chapter/title|objectives|introduction//men or
-                                          chapter/title|objectives|introduction//md or
-                                          chapter/title|objectives|introduction//mdn">
-                                <xsl:text>true</xsl:text>
-                            </xsl:if>
-                        </xsl:when>
-                        <xsl:otherwise>
-                            <xsl:if test=".//m or .//me or .//men or .//md or .//mdn">
-                                <xsl:text>true</xsl:text>
-                            </xsl:if>
-                        </xsl:otherwise>
-                    </xsl:choose>
                 </xsl:when>
                 <xsl:otherwise>
                     <xsl:text>false</xsl:text>
@@ -608,7 +616,7 @@
 <!-- Specialized divisions will only become files in the manifest at     -->
 <!-- chunk level 2, in other words, peers of chapters or sections        -->
 <!-- (book or chapter/appendix as parent, respectively)                  -->
-<xsl:template match="frontmatter|colophon|acknowledgement|preface|biography|chapter|appendix|index|section|exercises[parent::book|parent::chapter|parent::appendix]|reading-questions[parent::book|parent::chapter|parent::appendix]|references[parent::book|parent::chapter|parent::appendix]|solutions[parent::book|parent::chapter|parent::appendix]|glossary[parent::book|parent::chapter|parent::appendix]|conclusion[parent::chapter]|outcomes[preceding-sibling::section]" mode="spine">
+<xsl:template match="frontmatter|colophon|acknowledgement|biography|dedication|preface|chapter|appendix|index|section|exercises[parent::book|parent::chapter|parent::appendix]|reading-questions[parent::book|parent::chapter|parent::appendix]|chapter/solutions|appendix/solutions|backmatter/solutions|chapter/references|appendix/references|backmatter/references|glossary[parent::book|parent::chapter|parent::appendix]|conclusion[parent::chapter]|outcomes[preceding-sibling::section]" mode="spine">
     <xsl:element name="itemref" xmlns="http://www.idpf.org/2007/opf">
         <xsl:attribute name="idref">
             <xsl:apply-templates select="." mode="html-id" />
@@ -645,8 +653,15 @@
             <xsl:for-each select="$document-root//image">
                 <image>
                     <!-- filename begins with directories from publisher file -->
+                    <xsl:attribute name="sourcename">
+                        <xsl:apply-templates select="." mode="epub-base-filename">
+                            <xsl:with-param name="purpose" select="'read'"/>
+                        </xsl:apply-templates>
+                    </xsl:attribute>
                     <xsl:attribute name="filename">
-                        <xsl:apply-templates select="." mode="epub-base-filename"/>
+                        <xsl:apply-templates select="." mode="epub-base-filename">
+                            <xsl:with-param name="purpose" select="'write'"/>
+                        </xsl:apply-templates>
                     </xsl:attribute>
                 </image>
             </xsl:for-each>
@@ -796,11 +811,11 @@ width: 100%
                                 </xsl:element>
                             </li>
                         </xsl:for-each>
-                        <xsl:if test="$document-root/backmatter/appendix">
+                        <xsl:if test="$document-root/backmatter/appendix|$document-root/backmatter/solutions">
                             <li class="no-marker">
                                 <span>Appendices</span>
                                 <ol type="A">
-                                    <xsl:for-each select="$document-root/backmatter/appendix">
+                                    <xsl:for-each select="$document-root/backmatter/appendix|$document-root/backmatter/solutions">
                                         <li>
                                             <xsl:element name="a">
                                                 <xsl:attribute name="href">
@@ -813,7 +828,7 @@ width: 100%
                                 </ol>
                             </li>
                         </xsl:if>
-                        <xsl:for-each select="$document-root/backmatter/index">
+                        <xsl:for-each select="$document-root/backmatter/references|$document-root/backmatter/index">
                             <li class="no-marker">
                                 <xsl:element name="a">
                                     <xsl:attribute name="href">
@@ -871,7 +886,13 @@ width: 100%
 
 <!-- Base filename for an image,  -->
 <!-- mostly handling the @source case -->
+
+<!-- Parametrized by "read": -->
+<!-- 'read' produces path to source file in input folder tree -->
+<!-- 'write' produces path to file in output folder tree      -->
 <xsl:template match="image" mode="epub-base-filename">
+    <xsl:param name="purpose"/>
+
     <xsl:choose>
         <xsl:when test="@source">
             <xsl:variable name="extension">
@@ -880,7 +901,14 @@ width: 100%
                 </xsl:call-template>
             </xsl:variable>
             <!-- PDF LaTeX, SVG HTML, PNG Kindle if not indicated -->
-            <xsl:value-of select="$external-directory"/>
+            <xsl:choose>
+                <xsl:when test="$purpose = 'read'">
+                    <xsl:value-of select="$external-directory-source"/>
+                </xsl:when>
+                <xsl:when test="$purpose = 'write'">
+                    <xsl:value-of select="$external-directory"/>
+                </xsl:when>
+            </xsl:choose>
             <xsl:apply-templates select="@source" />
             <xsl:if test="$extension=''">
                 <xsl:choose>
@@ -894,7 +922,14 @@ width: 100%
             </xsl:if>
         </xsl:when>
         <xsl:when test="latex-image|sageplot|asymptote">
-            <xsl:value-of select="$generated-directory"/>
+            <xsl:choose>
+                <xsl:when test="$purpose = 'read'">
+                    <xsl:value-of select="$generated-directory-source"/>
+                </xsl:when>
+                <xsl:when test="$purpose = 'write'">
+                    <xsl:value-of select="$generated-directory"/>
+                </xsl:when>
+            </xsl:choose>
             <xsl:choose>
                 <xsl:when test="latex-image">
                     <xsl:text>latex-image</xsl:text>
@@ -946,7 +981,9 @@ width: 100%
         <xsl:attribute name="href">
             <xsl:value-of select="$xhtml-dir" />
             <xsl:text>/</xsl:text>
-            <xsl:apply-templates select="." mode="epub-base-filename" />
+            <xsl:apply-templates select="." mode="epub-base-filename">
+                <xsl:with-param name="purpose" select="'write'"/>
+            </xsl:apply-templates>
         </xsl:attribute>
         <!-- media attribute -->
         <xsl:attribute name="media-type">
@@ -978,7 +1015,9 @@ width: 100%
 <xsl:template match="image">
     <xsl:element name="img">
         <xsl:attribute name="src">
-            <xsl:apply-templates select="." mode="epub-base-filename" />
+            <xsl:apply-templates select="." mode="epub-base-filename">
+                <xsl:with-param name="purpose" select="'write'"/>
+            </xsl:apply-templates>
         </xsl:attribute>
         <xsl:if test="@width">
             <xsl:attribute name="style">
@@ -1188,7 +1227,7 @@ width: 100%
 <!-- Pluck SVGs from the file full of them, with matching IDs -->
 <xsl:template match="m|me|men|md|mdn">
     <xsl:variable name="id">
-        <xsl:apply-templates select="." mode="visible-id"/>
+        <xsl:apply-templates select="." mode="html-id"/>
     </xsl:variable>
     <xsl:variable name="math" select="$math-repr/pi:math[@id = $id]"/>
     <xsl:variable name="context" select="string($math/@context)"/>
@@ -1205,9 +1244,13 @@ width: 100%
                 </xsl:when>
             </xsl:choose>
         </xsl:attribute>
-        <xsl:attribute name="id">
-            <xsl:text>mjx-eqn:</xsl:text><xsl:value-of select="$id" />
-        </xsl:attribute>
+        <!-- Can only "xref" to an "men" or an "md/mrow" or an "mdn/mrow" -->
+        <xsl:if test="$context = 'men' or $context = 'md' or $context = 'mdn'">
+            <xsl:attribute name="id">
+              <xsl:text>mjx-eqn:</xsl:text><xsl:value-of select="$id"
+              />
+            </xsl:attribute>
+        </xsl:if>
         <!-- Finally, drop a "svg" element, "math" element, or ASCII speech -->
         <xsl:choose>
             <xsl:when test="$math.format = 'svg'">
@@ -1226,6 +1269,32 @@ width: 100%
             </xsl:when>
         </xsl:choose>
     </span>
+</xsl:template>
+
+<!-- This is copied from pretext-html.xsl where it has    -->
+<!-- match="*". We just need to contend with mrow in EPUB -->
+<!-- since we can't control the ID MathJax returns.       -->
+<xsl:template match="mrow" mode="url">
+    <!-- An enclosing "md" or "mdn" is never a division, so     -->
+    <!-- there will always be a containing file and a fragment  -->
+    <!-- identifier (unlike teh more general version in -html). -->
+    <xsl:apply-templates select="." mode="containing-filename" />
+    <xsl:text>#</xsl:text>
+    <!-- the ids on equations are manufactured -->
+    <!-- by MathJax to look this way -->
+    <xsl:text>mjx-eqn:</xsl:text>
+    <!-- This is the main difference from the * template in      -->
+    <!-- -html. We can only control the HTML id on the enclosing -->
+    <!-- md or mdn, so we get its ID for the hyperlink.          -->
+    <xsl:apply-templates select="parent::*" mode="html-id" />
+</xsl:template>
+
+<!-- Simple text representations of structural elements for -->
+<!-- head/title, which is really restrictive.               -->
+<xsl:template match="*" mode="type-name-number">
+    <xsl:apply-templates select="." mode="type-name" />
+    <xsl:text> </xsl:text>
+    <xsl:apply-templates select="." mode="number" />
 </xsl:template>
 
 <!-- Identity template as a mode coursing through SVGs  -->
