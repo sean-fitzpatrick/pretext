@@ -703,21 +703,29 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
     <!-- worksheet, so CSS can kill on the "printable" versions         -->
     <!-- $paper is LOWER CASE "a4" and "letter"                         -->
     <xsl:if test="self::worksheet">
-        <xsl:variable name="letter-filename">
-            <xsl:apply-templates select="." mode="standalone-worksheet-filename">
-                <xsl:with-param name="paper" select="'letter'"/>
-            </xsl:apply-templates>
-        </xsl:variable>
-        <xsl:variable name="a4-filename">
-            <xsl:apply-templates select="." mode="standalone-worksheet-filename">
-                <xsl:with-param name="paper" select="'a4'"/>
-            </xsl:apply-templates>
-        </xsl:variable>
-        <div class="print-links">
-            <a href="{$a4-filename}" class="a4">A4</a>
-            <a href="{$letter-filename}" class="us">US</a>
-        </div>
+        <xsl:apply-templates select="." mode="standalone-worksheet-links"/>
     </xsl:if>
+</xsl:template>
+
+<!-- Links to the "printable" version(s), meant only for "viewable" -->
+<!-- worksheet, so CSS can kill on the "printable" versions         -->
+<!-- $paper is LOWER CASE "a4" and "letter".  We isolate link       -->
+<!-- creation, so we can kill it simply in derivative conversions   -->
+<xsl:template match="worksheet" mode="standalone-worksheet-links">
+    <xsl:variable name="letter-filename">
+        <xsl:apply-templates select="." mode="standalone-worksheet-filename">
+            <xsl:with-param name="paper" select="'letter'"/>
+        </xsl:apply-templates>
+    </xsl:variable>
+    <xsl:variable name="a4-filename">
+        <xsl:apply-templates select="." mode="standalone-worksheet-filename">
+            <xsl:with-param name="paper" select="'a4'"/>
+        </xsl:apply-templates>
+    </xsl:variable>
+    <div class="print-links">
+        <a href="{$a4-filename}" class="a4">A4</a>
+        <a href="{$letter-filename}" class="us">US</a>
+    </div>
 </xsl:template>
 
 <!-- Recursively finds enclosing structural node -->
@@ -1756,7 +1764,7 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
     <xsl:value-of select="$b-commentary" />
 </xsl:template>
 <xsl:template match="fn|p|blockquote|biblio|biblio/note|defined-term|&DEFINITION-LIKE;|&EXAMPLE-LIKE;|&PROJECT-LIKE;|task|&FIGURE-LIKE;|&THEOREM-LIKE;|proof|case|&AXIOM-LIKE;|&REMARK-LIKE;|&COMPUTATION-LIKE;|&ASIDE-LIKE;|poem|assemblage|paragraphs|&GOAL-LIKE;|exercise|hint|answer|solution|exercisegroup|men|mrow|li[not(parent::var)]|contributor|fragment" mode="xref-as-knowl">
-    <xsl:value-of select="true()" />
+    <xsl:value-of select="not($b-skip-knowls)" />
 </xsl:template>
 
 <!-- build xref-knowl, and optionally a hidden-knowl duplicate       -->
@@ -2187,6 +2195,12 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
             <xsl:apply-templates select="." mode="list-number" />
             <xsl:text>)</xsl:text>
         </span>
+        <xsl:if test="title">
+            <xsl:call-template name="space-styled"/>
+            <span class="title">
+                <xsl:apply-templates select="." mode="title-full"/>
+            </span>
+        </xsl:if>
     </h6>
 </xsl:template>
 
@@ -3951,14 +3965,6 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
     <xsl:param name="b-original" select="true()" />
     <xsl:param name="block-type"/>
 
-    <!-- *Something* is being output, so include an (optional) title -->
-    <xsl:if test="title">
-        <h6 class="heading">
-            <span class="title">
-                <xsl:apply-templates select="." mode="title-full"/>
-            </span>
-        </h6>
-    </xsl:if>
     <xsl:choose>
         <!-- introduction?, task+, conclusion? -->
         <xsl:when test="task">
@@ -4046,14 +4052,6 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
         <article class="exercise-like">
             <xsl:apply-templates select="." mode="heading-birth" />
 
-            <!-- *Something* is being output, so include an (optional) title -->
-            <xsl:if test="title">
-                <h6 class="heading">
-                    <span class="title">
-                        <xsl:apply-templates select="." mode="title-full"/>
-                    </span>
-                </h6>
-            </xsl:if>
             <xsl:choose>
                 <!-- introduction?, task+, conclusion? -->
                 <xsl:when test="task">
