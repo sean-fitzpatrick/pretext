@@ -1164,7 +1164,7 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
         <xsl:if test="$b-pageref">
             <xsl:text>\label{#4}</xsl:text>
         </xsl:if>
-        <xsl:text>\hypertarget{#4}{}}, after={\notblank{#3}{\newline\rule{\workspacestrutwidth}{#3}\newline}{}}}&#xa;</xsl:text>
+        <xsl:text>\hypertarget{#4}{}}, after={\notblank{#3}{\newline\rule{\workspacestrutwidth}{#3}\newline\vfill}{}}}&#xa;</xsl:text>
     </xsl:if>
     <!-- Division Exercise, Exercise Group -->
     <!-- The exercise itself carries the indentation, hence we can use breakable -->
@@ -1177,7 +1177,7 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
         <xsl:if test="$b-pageref">
             <xsl:text>\label{#4}</xsl:text>
         </xsl:if>
-        <xsl:text>\hypertarget{#4}{}}, after={\notblank{#3}{\newline\rule{\workspacestrutwidth}{#3}\newline}{}}}&#xa;</xsl:text>
+        <xsl:text>\hypertarget{#4}{}}, after={\notblank{#3}{\newline\rule{\workspacestrutwidth}{#3}\newline\vfill}{}}}&#xa;</xsl:text>
     </xsl:if>
     <!-- Division Exercise, Exercise Group, Columnar -->
     <!-- Explicity unbreakable, to behave in multicolumn tcbraster -->
@@ -1189,7 +1189,7 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
         <xsl:if test="$b-pageref">
             <xsl:text>\label{#4}</xsl:text>
         </xsl:if>
-        <xsl:text>\hypertarget{#4}{}}, after={\notblank{#3}{\newline\rule{\workspacestrutwidth}{#3}\newline}{}}}&#xa;</xsl:text>
+        <xsl:text>\hypertarget{#4}{}}, after={\notblank{#3}{\newline\rule{\workspacestrutwidth}{#3}\newline\vfill}{}}}&#xa;</xsl:text>
     </xsl:if>
     <xsl:if test="$document-root//exercise[@workspace]">
         <xsl:text>%% Worksheet exercises may have workspaces&#xa;</xsl:text>
@@ -5349,11 +5349,10 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
     </xsl:variable>
     <!-- build it -->
     <xsl:text>\par\medskip\noindent%&#xa;</xsl:text>
-    <xsl:if test="title">
-        <xsl:text>\textbf{</xsl:text>
-        <xsl:apply-templates select="." mode="title-full" />
-        <xsl:text>}\space\space</xsl:text>
-    </xsl:if>
+    <xsl:text>\textbf{</xsl:text>
+    <!-- title may be default title -->
+    <xsl:apply-templates select="." mode="title-full" />
+    <xsl:text>}\space\space</xsl:text>
     <xsl:if test="@xml:id">
         <xsl:apply-templates select="." mode="label"/>
     </xsl:if>
@@ -5613,12 +5612,10 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
             <xsl:text>{</xsl:text>
             <xsl:apply-templates select="." mode="title-full"/>
             <xsl:text>}</xsl:text>
-            <!-- workspace fraction, only if given, else blank -->
-            <!-- worksheets only now, eventually exams?        -->
+            <!-- if not in a "worksheet" and if the exercise or project-like does  -->
+            <!-- not have a "workspace" attribute then this argument will be blank -->
             <xsl:text>{</xsl:text>
-            <xsl:if test="$worksheet and @workspace">
-                <xsl:apply-templates select="." mode="sanitize-workspace"/>
-            </xsl:if>
+            <xsl:apply-templates select="." mode="sanitize-workspace"/>
             <xsl:text>}</xsl:text>
             <xsl:text>{</xsl:text>
             <xsl:apply-templates select="." mode="latex-id"/>
@@ -6130,10 +6127,14 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
                 <xsl:with-param name="b-has-answer"    select="$b-has-answer" />
                 <xsl:with-param name="b-has-solution"  select="$b-has-solution" />
             </xsl:apply-templates>
-            <!-- this is a bit rough -->
-            <xsl:if test="not(task) and @workspace and ancestor::worksheet">
-                <xsl:text>\\\rule{\workspacestrutwidth}{</xsl:text>
+            <!-- possibly add some workspace for items from a worksheet     -->
+            <!-- an empty result is a signal there is no workspace authored -->
+            <xsl:variable name="vertical-space">
                 <xsl:apply-templates select="." mode="sanitize-workspace"/>
+            </xsl:variable>
+            <xsl:if test="not($vertical-space = '')">
+                <xsl:text>\par\rule{\workspacestrutwidth}{</xsl:text>
+                <xsl:value-of select="$vertical-space"/>
                 <xsl:text>}%&#xa;</xsl:text>
             </xsl:if>
         </xsl:if>
@@ -6580,13 +6581,11 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
 <!-- items (titles, index), so use the "fixltx2e" package, -->
 <!-- which declares \MakeRobust\( and \MakeRobust\)        -->
 
-<!-- These two templates provide the delimiters for -->
-<!-- inline math, implementing abstract templates.  -->
-<xsl:template name="begin-inline-math">
+<!-- This template wraps inline math in delimiters -->
+<xsl:template name="inline-math-wrapper">
+    <xsl:param name="math"/>
     <xsl:text>\(</xsl:text>
-</xsl:template>
-
-<xsl:template name="end-inline-math">
+    <xsl:value-of select="$math"/>
     <xsl:text>\)</xsl:text>
 </xsl:template>
 
@@ -10833,9 +10832,9 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
     <xsl:apply-templates select="." mode="title-full"/>
     <xsl:call-template name="rangle-character"/>
     <xsl:text> </xsl:text>
-    <xsl:call-template name="begin-inline-math"/>
-    <xsl:text>\equiv</xsl:text>
-    <xsl:call-template name="end-inline-math"/>
+    <xsl:call-template name="inline-math-wrapper">
+        <xsl:with-param name="math" select="'\equiv'"/>
+    </xsl:call-template>
     <!-- sortby first, @ separator, then tt version -->
     <xsl:text>\index{</xsl:text>
     <xsl:value-of select="@xml:id" />

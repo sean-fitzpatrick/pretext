@@ -95,6 +95,11 @@
 <xsl:param name="tmpdir"/>
 <xsl:param name="mathfile"/>
 <xsl:variable name="math-repr" select="document($mathfile)/pi:math-representations"/>
+<!-- For MathML math, the "speechfile" is not used and an       -->
+<!-- empty string is passed in.  This does not seem to cause    -->
+<!-- an error here, or in any subsequent uses in the empty case -->
+<xsl:param name="speechfile"/>
+<xsl:variable name="speech-repr" select="document($speechfile)/pi:math-representations"/>
 
 <!-- One of 'svg", 'mml', 'kindle', or 'speech', always     -->
 <!-- Also 'kindle' dictates MathML output, but is primarily -->
@@ -121,6 +126,12 @@
         </xsl:when>
     </xsl:choose>
 </xsl:variable>
+
+<!-- For WeBWorK in EPUB, we force WeBWorK to be static -->
+<xsl:variable name="b-webwork-inline-static" select="true()" />
+<xsl:variable name="b-webwork-divisional-static" select="true()" />
+<xsl:variable name="b-webwork-reading-static" select="true()" />
+<xsl:variable name="b-webwork-worksheet-static" select="true()" />
 
 <!-- Cover image filename, once -->
 <xsl:variable name="cover-filename">
@@ -523,9 +534,9 @@
 <!-- See "Core Media Type Resources"               -->
 <!-- Add to spine identically                      -->
 <!-- Specialized divisions are terminal in back    -->
-<!-- matter, and only a seperate file when within  -->
+<!-- matter, and only a separate file when within  -->
 <!-- a "chapter", at level 2                       -->
-<xsl:template match="frontmatter|colophon|biography|dedication|acknowledgement|preface|chapter|chapter/conclusion|chapter/outcomes[preceding-sibling::section]|appendix|index|section|exercises|chapter/solutions|appendix/solutions|backmatter/solutions|chapter/references|appendix/references|backmatter/references" mode="manifest">
+<xsl:template match="frontmatter|colophon|biography|dedication|acknowledgement|preface|chapter|chapter/conclusion|chapter/outcomes[preceding-sibling::section]|appendix|index|section|exercises|chapter/reading-questions|chapter/solutions|appendix/solutions|backmatter/solutions|chapter/references|appendix/references|backmatter/references" mode="manifest">
     <!-- Annotate manifest entries -->
     <xsl:comment>
         <xsl:apply-templates select="." mode="long-name" />
@@ -603,7 +614,9 @@
         <itemref idref="table-contents" linear="yes"/>
         <itemref idref="cover-page" linear="yes" />
         <xsl:apply-templates select="$document-root" mode="spine" />
-        <itemref idref="endnotes" linear="no" />
+        <xsl:if test="$b-has-endnotes">
+            <itemref idref="endnotes" linear="no" />
+        </xsl:if>
     </spine>
 </xsl:template>
 
@@ -1231,6 +1244,7 @@ width: 100%
         <xsl:apply-templates select="." mode="visible-id"/>
     </xsl:variable>
     <xsl:variable name="math" select="$math-repr/pi:math[@id = $id]"/>
+    <xsl:variable name="speech" select="$speech-repr/pi:math[@id = $id]"/>
     <xsl:variable name="context" select="string($math/@context)"/>
     <!-- <xsl:message>C:<xsl:value-of select="$math/@context"/>:C</xsl:message> -->
     <!-- <xsl:copy-of select="$math-repr[../@id = $id]"/> -->
@@ -1255,7 +1269,10 @@ width: 100%
         <!-- Finally, drop a "svg" element, "math" element, or ASCII speech -->
         <xsl:choose>
             <xsl:when test="$math.format = 'svg'">
-                <xsl:apply-templates select="$math/div[@class = 'svg']/svg:svg" mode="svg-edit"/>
+                <xsl:apply-templates select="$math/div[@class = 'svg']/svg:svg" mode="svg-edit">
+                    <xsl:with-param name="speech" select="$speech"/>
+                    <xsl:with-param name="base-id" select="$id"/>
+                </xsl:apply-templates>
             </xsl:when>
             <xsl:when test="$math.format = 'mml'">
                 <xsl:copy-of select="$math/div[@class = 'mathml']/math:math"/>
@@ -1278,7 +1295,7 @@ width: 100%
 <xsl:template match="mrow" mode="url">
     <!-- An enclosing "md" or "mdn" is never a division, so     -->
     <!-- there will always be a containing file and a fragment  -->
-    <!-- identifier (unlike teh more general version in -html). -->
+    <!-- identifier (unlike the more general version in -html). -->
     <xsl:apply-templates select="." mode="containing-filename" />
     <xsl:text>#</xsl:text>
     <!-- the ids on equations are manufactured -->
@@ -1307,19 +1324,67 @@ width: 100%
     </xsl:copy>
 </xsl:template>
 
-<!-- SVG attributes to remove -->
-<!-- epubcheck 4.0.2 complains about these for EPUB 3.0.1 -->
-<!-- Each match appears to be once per math-SVG           -->
-<xsl:template match="svg:svg/@focusable|svg:svg/@role|svg:svg/@aria-labelledby" mode="svg-edit"/>
-<!-- Per-image, when fonts are included -->
-<xsl:template match="svg:svg/svg:defs/@aria-hidden" mode="svg-edit"/>
-<!-- Per-font-cache, when fonts are consolidated -->
-<xsl:template match="svg:svg/svg:g/@aria-hidden" mode="svg-edit"/>
+<!-- SVG elements to augment -->
+<!-- We enrich the main "svg" element with a speech string.      -->
+<!--   1.  Since this is the "entry template" for this mode,     -->
+<!--       this is the only place we accept the "speech" param.  -->
+<!--   2.  MathJax seems to use SVGs inside of SVGs for placing  -->
+<!--       numbers/tags of numbered equations, so we only enrich -->
+<!--       "top-level" SVG - that is the point of the filter.    -->
+<!--   3.  The id of the math element will be used as the base   -->
+<!--       of (unique) ids necessary to point to the speech.     -->
+<!--       Pattern 11 at:                                        -->
+<!--       https://www.deque.com/blog/creating-accessible-svgs/  -->
+<xsl:template match="svg:svg[not(ancestor::svg:svg)]" mode="svg-edit">
+    <xsl:param name="speech"/>
+    <xsl:param name="base-id"/>
 
-<!-- Uncomment to test inline image behavior -->
-<!-- 
-<xsl:template match="img">
-    <img src="{@src}" style="width:8ex;"/>
+    <!-- manufacture id values for consistency, uniqueness -->
+    <xsl:variable name="title-id">
+        <xsl:value-of select="$base-id"/>
+        <xsl:text>-title</xsl:text>
+    </xsl:variable>
+    <xsl:variable name="desc-id">
+        <xsl:value-of select="$base-id"/>
+        <xsl:text>-desc</xsl:text>
+    </xsl:variable>
+
+    <xsl:copy>
+        <!-- attributes first -->
+        <xsl:apply-templates select="@*" mode="svg-edit"/>
+        <xsl:attribute name="role">
+            <xsl:text>img</xsl:text>
+        </xsl:attribute>
+        <xsl:attribute name="aria-labelledby">
+            <xsl:value-of select="$title-id"/>
+            <xsl:text> </xsl:text>
+            <xsl:value-of select="$desc-id"/>
+        </xsl:attribute>
+        <!-- now additional metadata, of sorts -->
+        <xsl:element name="title" namespace="http://www.w3.org/2000/svg">
+            <xsl:attribute name="id">
+                <xsl:value-of select="$title-id"/>
+            </xsl:attribute>
+            <xsl:text>Math Expression</xsl:text>
+        </xsl:element>
+        <xsl:element name="desc" namespace="http://www.w3.org/2000/svg">
+            <xsl:attribute name="id">
+                <xsl:value-of select="$desc-id"/>
+            </xsl:attribute>
+            <xsl:value-of select="$speech"/>
+        </xsl:element>
+        <!-- and all the rest of the nodes -->
+        <xsl:apply-templates select="node()" mode="svg-edit"/>
+    </xsl:copy>
 </xsl:template>
- -->
+
+<!-- SVG attributes to remove -->
+<!-- There can be attributes of SVG images produced by MathJax     -->
+<!-- which cause validation errors when used within an EPUB.       -->
+<!-- 2021-09-02: these seem to have gone away in a transition from -->
+<!-- EPUB 3.0.0 to EPUB 3.2, as reported by  epubcheck v4.2.2.  We -->
+<!-- will remove @focusable just as an example, in case there are  -->
+<!-- future changes.                                               -->
+<xsl:template match="svg:svg/@focusable" mode="svg-edit"/>
+
 </xsl:stylesheet>

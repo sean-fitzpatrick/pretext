@@ -79,7 +79,7 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
 <!-- See more generally applicable parameters in pretext-common.xsl file     -->
 
 <!-- CSS and Javascript Servers -->
-<!-- We allow processing paramteers to specify new servers   -->
+<!-- We allow processing paramters to specify new servers    -->
 <!-- or to specify the particular CSS file, which may have   -->
 <!-- different color schemes.  The defaults should work      -->
 <!-- fine and will not need changes on initial or casual use -->
@@ -294,6 +294,11 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
 <xsl:param name="webwork.divisional.static" select="'yes'" />
 <xsl:param name="webwork.reading.static" select="'yes'" />
 <xsl:param name="webwork.worksheet.static" select="'yes'" />
+<!-- We make variables instead of using the params directly, so that in EPUB we can overrule -->
+<xsl:variable name="b-webwork-inline-static" select="$webwork.inline.static = 'yes'" />
+<xsl:variable name="b-webwork-divisional-static" select="$webwork.divisional.static = 'yes'" />
+<xsl:variable name="b-webwork-reading-static" select="$webwork.reading.static = 'yes'" />
+<xsl:variable name="b-webwork-worksheet-static" select="$webwork.worksheet.static = 'yes'" />
 
 <xsl:variable name="webwork-reps-version" select="$document-root//webwork-reps[1]/@version"/>
 
@@ -313,7 +318,7 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
 <!-- ############## -->
 
 <!-- Deprecation warnings are universal analysis of source and parameters   -->
-<!-- There is always a "document root" directly under the mathbook element, -->
+<!-- There is always a "document root" directly under the pretext element,  -->
 <!-- and we process it with the chunking template called below              -->
 <!-- Note that "docinfo" is at the same level and not structural, so killed -->
 <xsl:template match="/">
@@ -608,7 +613,7 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
     <xsl:element name="{$html-heading}">
         <xsl:attribute name="class">
             <xsl:choose>
-                <xsl:when test="self::chapter and ($numbering-maxlevel > 0)">
+                <xsl:when test="(self::chapter or self::appendix) and ($numbering-maxlevel > 0)">
                     <xsl:text>heading</xsl:text>
                 </xsl:when>
                 <!-- hide "Chapter" when numbers are killed -->
@@ -618,6 +623,45 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
             </xsl:choose>
         </xsl:attribute>
         <xsl:apply-templates select="." mode="header-content" />
+    </xsl:element>
+</xsl:template>
+
+<!-- Headings for structural divisions when they are repeated: -->
+<!-- list-of, solutions                                        -->
+<xsl:template match="*" mode="duplicate-heading">
+    <xsl:param name="heading-level"/>
+    <xsl:variable name="hN">
+        <xsl:text>h</xsl:text>
+        <xsl:choose>
+            <xsl:when test="$heading-level > 6">
+                <xsl:text>6</xsl:text>
+            </xsl:when>
+            <xsl:otherwise>
+                <xsl:value-of select="$heading-level"/>
+            </xsl:otherwise>
+        </xsl:choose>
+    </xsl:variable>
+    <xsl:element name="{$hN}">
+        <xsl:attribute name="class">
+            <xsl:text>heading</xsl:text>
+            <xsl:if test="not(self::chapter) or ($numbering-maxlevel = 0)">
+                <xsl:text> hide-type</xsl:text>
+            </xsl:if>
+        </xsl:attribute>
+        <xsl:attribute name="title">
+            <xsl:apply-templates select="." mode="tooltip-text" />
+        </xsl:attribute>
+        <span class="type">
+            <xsl:apply-templates select="." mode="type-name" />
+        </span>
+        <xsl:text> </xsl:text>
+        <span class="codenumber">
+            <xsl:apply-templates select="." mode="number" />
+        </span>
+        <xsl:text> </xsl:text>
+        <span class="title">
+            <xsl:apply-templates select="." mode="title-full" />
+        </span>
     </xsl:element>
 </xsl:template>
 
@@ -1065,7 +1109,7 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
         <xsl:when test="$b-has-heading">
             <!-- as a duplicate of generated content, no HTML id -->
             <section class="{local-name(.)}">
-                <xsl:apply-templates select="." mode="section-header">
+                <xsl:apply-templates select="." mode="duplicate-heading">
                     <xsl:with-param name="heading-level" select="$heading-level"/>
                 </xsl:apply-templates>
                 <!-- we don't do an "author-byline" here in duplication -->
@@ -1093,38 +1137,11 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
 <xsl:template name="list-of-end" />
 
 <!-- Subdivision headings in list-of's -->
-<!-- Amalgamation of "section-header" and "header-content" -->
-<!--   (1) No author credit                                -->
-<!--   (2) No permalink                                    -->
-<!-- TODO: maybe a stock template could do a better job with this? -->
 <xsl:template match="*" mode="list-of-header">
     <xsl:param name="heading-level"/>
-
-    <xsl:variable name="heading-level">
-        <xsl:apply-templates select="." mode="html-heading">
-            <xsl:with-param name="heading-level" select="$heading-level"/>
-        </xsl:apply-templates>
-    </xsl:variable>
-
-    <xsl:element name="{$heading-level}">
-        <xsl:attribute name="class">
-            <xsl:text>heading</xsl:text>
-        </xsl:attribute>
-        <xsl:attribute name="title">
-            <xsl:apply-templates select="." mode="tooltip-text" />
-        </xsl:attribute>
-        <span class="type">
-            <xsl:apply-templates select="." mode="type-name" />
-        </span>
-        <xsl:text> </xsl:text>
-        <span class="codenumber">
-            <xsl:apply-templates select="." mode="number" />
-        </span>
-        <xsl:text> </xsl:text>
-        <span class="title">
-            <xsl:apply-templates select="." mode="title-full" />
-        </span>
-    </xsl:element>
+    <xsl:apply-templates select="." mode="duplicate-heading">
+        <xsl:with-param name="heading-level" select="$heading-level"/>
+    </xsl:apply-templates>
 </xsl:template>
 
 <!-- Entries in list-of's -->
@@ -1694,7 +1711,7 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
 <!-- interest.  Create cross-reference.                          -->
 <!-- One notable case: paragraph must be "top-level", just below -->
 <!-- a structural document node                                  -->
-<!-- Recursion always halts, since "mathbook" is structural      -->
+<!-- Recursion always halts, since "pretext" is structural       -->
 <!-- TODO: save knowl or section link                            -->
 <!-- We create content of "xref-knowl" if it is a block.         -->
 <!-- TODO: identify index targets consistently in "make-efficient-knowls" -->
@@ -2266,7 +2283,10 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
 <!-- and divisions of "exercises"     -->
 <!-- No title, then nothing happens   -->
 <xsl:template match="*" mode="heading-title">
-    <xsl:if test="title/*|title/text()">
+    <xsl:variable name="has-default-title">
+        <xsl:apply-templates select="." mode="has-default-title"/>
+    </xsl:variable>
+    <xsl:if test="title/*|title/text() or $has-default-title = 'true'">
         <h6 class="heading">
             <span class="title">
                 <xsl:apply-templates select="." mode="title-full" />
@@ -4219,7 +4239,14 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
             </xsl:if>
             <!-- optionally, an indication of workspace -->
             <!-- for a print version of a worksheet     -->
-            <xsl:apply-templates select="." mode="worksheet-workspace"/>
+            <xsl:choose>
+                <xsl:when test="self::static">
+                    <xsl:apply-templates select="ancestor::exercise" mode="worksheet-workspace"/>
+                </xsl:when>
+                <xsl:otherwise>
+                    <xsl:apply-templates select="." mode="worksheet-workspace"/>
+                </xsl:otherwise>
+            </xsl:choose>
         </xsl:when>
         <!-- TODO: contained "if" should just be a new "when"? (look around for similar)" -->
         <xsl:otherwise>
@@ -5128,11 +5155,11 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
                 </xsl:if>
                 <!-- "title" only possible for structured version of a list item -->
                 <xsl:if test="title">
-                    <h6 class="heading">
+                    <span class="heading">
                         <span class="title">
                             <xsl:apply-templates select="." mode="title-full"/>
                         </span>
-                    </h6>
+                    </span>
                 </xsl:if>
                 <!-- Unstructured list items will be output as an HTML "p"     -->
                 <!-- within the "li", much like a structured list item could   -->
@@ -5245,13 +5272,12 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
 <!-- to be part of MathJax configuration, but   -->
 <!-- also free up the dollar sign               -->
 
-<!-- These two templates provide the delimiters for -->
-<!-- inline math, so we can adjust with overides.   -->
-<xsl:template name="begin-inline-math">
-    <xsl:text>\(</xsl:text>
-</xsl:template>
 
-<xsl:template name="end-inline-math">
+<!-- This template wraps inline math in delimiters -->
+<xsl:template name="inline-math-wrapper">
+    <xsl:param name="math"/>
+    <xsl:text>\(</xsl:text>
+    <xsl:value-of select="$math"/>
     <xsl:text>\)</xsl:text>
 </xsl:template>
 
@@ -5429,7 +5455,7 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
 <!--                                                             -->
 <!-- Note this holds for parts of interactives as well, so       -->
 <!-- authors need to use the MathJax script tags for any part of -->
-<!-- thier HTML they want displayed as mathematics.              -->
+<!-- their HTML they want displayed as mathematics.              -->
 
 <xsl:template name="text-processing">
     <xsl:param name="text"/>
@@ -5677,6 +5703,9 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
                 <xsl:with-param name="image-description">
                     <xsl:apply-templates select="description" />
                 </xsl:with-param>
+                <xsl:with-param name="decorative">
+                    <xsl:apply-templates select="@decorative" />
+                </xsl:with-param>
             </xsl:call-template>
             <!-- possibly annotate with archive links -->
             <xsl:apply-templates select="." mode="archive">
@@ -5693,9 +5722,16 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
                     <xsl:text>contained</xsl:text>
                 </xsl:attribute>
                 <!-- alt attribute for accessibility -->
-                <xsl:attribute name="alt">
-                    <xsl:apply-templates select="description" />
-                </xsl:attribute>
+                <xsl:choose>
+                    <xsl:when test="@decorative = 'yes'">
+                        <xsl:attribute name="alt"/>
+                    </xsl:when>
+                    <xsl:when test="not(string(description) = '')">
+                        <xsl:attribute name="alt">
+                            <xsl:apply-templates select="description" />
+                        </xsl:attribute>
+                    </xsl:when>
+                </xsl:choose>
             </img>
             <!-- possibly annotate with archive links -->
             <xsl:apply-templates select="." mode="archive">
@@ -5716,7 +5752,7 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
 <!--   Asymptote graphics language                    -->
 <!--   LaTeX source code images                       -->
 <!--   Sage graphics plots, w/ PNG fallback for 3D    -->
-<!--   Match style is duplicated in mathbook-epub.xsl -->
+<!--   Match style is duplicated in pretext-epub.xsl  -->
 <xsl:template match="image[latex-image]|image[sageplot]" mode="image-inclusion">
     <xsl:variable name="base-pathname">
         <xsl:value-of select="$generated-directory"/>
@@ -5746,6 +5782,9 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
         </xsl:with-param>
         <xsl:with-param name="image-description">
             <xsl:apply-templates select="description" />
+        </xsl:with-param>
+        <xsl:with-param name="decorative">
+            <xsl:apply-templates select="@decorative" />
         </xsl:with-param>
     </xsl:call-template>
     <!-- possibly annotate with archive links -->
@@ -5786,7 +5825,7 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
             </xsl:when>
             <!-- failure -->
             <xsl:otherwise>
-                <xsl:message>PTX:ERROR:   the Asymptote diagram produced in "<xsl:value-of select="$html-filename"/>" needs to be available relative to the primary source file, or if available it is perhaps ill-formed and its width cannot be determined (which you might report as a bug).  We might be able to procede as if the diagram is square, but results can be unpredictable.</xsl:message>
+                <xsl:message>PTX:ERROR:   the Asymptote diagram produced in "<xsl:value-of select="$html-filename"/>" needs to be available relative to the primary source file, or if available it is perhaps ill-formed and its width cannot be determined (which you might report as a bug).  We might be able to proceed as if the diagram is square, but results can be unpredictable.</xsl:message>
                 <!-- reasonable guess at points/pixels -->
                 <xsl:text>400</xsl:text>
             </xsl:otherwise>
@@ -5808,7 +5847,7 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
             </xsl:when>
             <!-- failure -->
             <xsl:otherwise>
-                <xsl:message>PTX:ERROR:   the Asymptote diagram produced in "<xsl:value-of select="$html-filename"/>" needs to be available relative to the primary source file, or if available it is perhaps ill-formed and its height cannot be determined (which you might report as a bug).  We might be able to procede as if the diagram is square, but results can be unpredictable.</xsl:message>
+                <xsl:message>PTX:ERROR:   the Asymptote diagram produced in "<xsl:value-of select="$html-filename"/>" needs to be available relative to the primary source file, or if available it is perhaps ill-formed and its height cannot be determined (which you might report as a bug).  We might be able to proceed as if the diagram is square, but results can be unpredictable.</xsl:message>
                 <!-- reasonable guess at points/pixels -->
                 <xsl:text>400</xsl:text>
             </xsl:otherwise>
@@ -5851,6 +5890,7 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
     <xsl:param name="png-fallback-filename" select="''" />
     <xsl:param name="image-width" />
     <xsl:param name="image-description" select="''" />
+    <xsl:param name="decorative"/>
     <img>
         <!-- source file attribute for img element, the SVG image -->
         <xsl:attribute name="src">
@@ -5867,9 +5907,16 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
             <xsl:text>contained</xsl:text>
         </xsl:attribute>
         <!-- alt attribute for accessibility -->
-        <xsl:attribute name="alt">
-            <xsl:value-of select="$image-description" />
-        </xsl:attribute>
+        <xsl:choose>
+            <xsl:when test="$decorative = 'yes'">
+                <xsl:attribute name="alt"/>
+            </xsl:when>
+            <xsl:when test="not($image-description = '')">
+                <xsl:attribute name="alt">
+                    <xsl:value-of select="$image-description" />
+                </xsl:attribute>
+            </xsl:when>
+        </xsl:choose>
         <!-- PNG fallback, if available                                     -->
         <!-- https://www.envano.com/2014/04/using-svg-images-in-responsive- -->
         <!-- websites-with-a-fallback-for-browsers-not-supporting-svg/      -->
@@ -6295,7 +6342,7 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
                 <!-- Only purpose of this page is YouTube video -->
                 <!-- A hook could go here for some extras       -->
                 <!-- ########################################## -->
-                <xsl:call-template name="mathbook-js" />
+                <xsl:call-template name="pretext-js" />
                 <xsl:call-template name="knowl" />
                 <xsl:call-template name="fonts" />
                 <xsl:call-template name="css" />
@@ -6308,8 +6355,8 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
                 <!-- the first class controls the default icon -->
                 <xsl:attribute name="class">
                     <xsl:choose>
-                        <xsl:when test="$root/book">mathbook-book</xsl:when>
-                        <xsl:when test="$root/article">mathbook-article</xsl:when>
+                        <xsl:when test="$root/book">pretext-book</xsl:when>
+                        <xsl:when test="$root/article">pretext-article</xsl:when>
                     </xsl:choose>
                     <!-- ################################################# -->
                     <!-- This is how the left sidebar goes away            -->
@@ -7700,9 +7747,9 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
         <xsl:value-of select="."/>
     </xsl:variable>
     <xsl:variable name="math-pi">
-        <xsl:call-template name="begin-inline-math" />
-        <xsl:text>\pi</xsl:text>
-        <xsl:call-template name="end-inline-math" />
+        <xsl:call-template name="inline-math-wrapper">
+            <xsl:with-param name="math" select="'\pi'"/>
+        </xsl:call-template>
     </xsl:variable>
     <xsl:value-of select="str:replace($mag,'\pi',string($math-pi))"/>
 </xsl:template>
@@ -9827,7 +9874,7 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
         <xsl:otherwise>
             <script>
                 <!-- this is a hack to allow for local files and network resources,   -->
-                <!-- with or without managed directories.  There should be a seperate -->
+                <!-- with or without managed directories.  There should be a separate -->
                 <!-- attribute like an @href used for audio and video, and then any   -->
                 <!-- "http"-leading string should be flagged as a deprecation         -->
                 <xsl:variable name="location">
@@ -10020,10 +10067,10 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
                                                 (ancestor::reading-questions and $b-has-reading-solution) or
                                                 (ancestor::worksheet and $b-has-worksheet-solution) or
                                                 (not(ancestor::exercises or ancestor::reading-questions or ancestor::worksheet) and $b-has-inline-solution)"/>
-    <xsl:variable name="b-static" select="(ancestor::exercises and ($webwork.divisional.static = 'yes')) or
-                                          (ancestor::reading-questions and ($webwork.reading.static = 'yes')) or
-                                          (ancestor::worksheet and ($webwork.worksheet.static = 'yes')) or
-                                          (not(ancestor::exercises or ancestor::reading-questions or ancestor::worksheet) and ($webwork.inline.static = 'yes'))"/>
+    <xsl:variable name="b-static" select="(ancestor::exercises and $b-webwork-divisional-static) or
+                                          (ancestor::reading-questions and $b-webwork-reading-static) or
+                                          (ancestor::worksheet and $b-webwork-worksheet-static) or
+                                          (not(ancestor::exercises or ancestor::reading-questions or ancestor::worksheet) and $b-webwork-inline-static)"/>
     <xsl:choose>
         <!-- We print the static version when that is explicitly directed. -->
         <xsl:when test="($b-static = 'yes')">
@@ -10249,7 +10296,7 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
             <xsl:apply-templates select="." mode="sagecell" />
             <xsl:call-template name="syntax-highlight-header"/>
             <xsl:call-template name="google-search-box-js" />
-            <xsl:call-template name="mathbook-js" />
+            <xsl:call-template name="pretext-js" />
             <xsl:call-template name="knowl" />
             <xsl:call-template name="fonts" />
             <xsl:call-template name="hypothesis-annotation" />
@@ -10267,8 +10314,8 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
             <!-- the first class controls the default icon -->
             <xsl:attribute name="class">
                 <xsl:choose>
-                    <xsl:when test="$root/book">mathbook-book</xsl:when>
-                    <xsl:when test="$root/article">mathbook-article</xsl:when>
+                    <xsl:when test="$root/book">pretext-book</xsl:when>
+                    <xsl:when test="$root/article">pretext-article</xsl:when>
                 </xsl:choose>
                 <xsl:if test="$b-has-toc">
                     <xsl:text> has-toc has-sidebar-left</xsl:text> <!-- note space, later add right -->
@@ -10472,7 +10519,7 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
 
 <!-- Create the URL of the parent document node    -->
 <!-- Parent always exists, since the               -->
-<!-- structural check fails at <mathbook>          -->
+<!-- structural check fails at <pretext>           -->
 <!-- Identical in tree/linear schemes, up is up    -->
 <xsl:template match="*" mode="up-url">
     <xsl:if test="parent::*">
@@ -10484,7 +10531,7 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
             <xsl:apply-templates select="$parent" mode="url" />
         </xsl:if>
     </xsl:if>
-    <!-- will be empty precisely at children of <mathbook> -->
+    <!-- will be empty precisely at children of <pretext> -->
 </xsl:template>
 
 <!-- Next Linear URL -->
@@ -10517,8 +10564,8 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
     </xsl:choose>
 </xsl:template>
 
-<!-- Recursively look sideways to the right, else up     -->
-<!-- <mathbook> is not structural, so halt looking there -->
+<!-- Recursively look sideways to the right, else up    -->
+<!-- <pretext> is not structural, so halt looking there -->
 <xsl:template match="*" mode="next-sideways-url">
     <xsl:variable name="url">
         <xsl:if test="following-sibling::*">
@@ -10535,8 +10582,8 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
     </xsl:variable>
     <xsl:value-of select="$url" /> <!-- no harm if empty -->
     <xsl:if test="$url=''">
-        <!-- Try going up and then sideways                           -->
-        <!-- parent always exists, since <mathbook> is non-structural -->
+        <!-- Try going up and then sideways                          -->
+        <!-- parent always exists, since <pretext> is non-structural -->
         <xsl:variable name="parent" select="parent::*[1]" />
         <xsl:variable name="structural">
             <xsl:apply-templates select="$parent" mode="is-structural" />
@@ -10552,7 +10599,7 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
 <!-- Look sideways to the left                                  -->
 <!-- If present, move there and descend right branches          -->
 <!-- If nothing there, move up once                             -->
-<!-- <mathbook> is not structural, so halt if we go up to there -->
+<!-- <pretext> is not structural, so halt if we go up to there  -->
 <xsl:template match="*" mode="previous-linear-url">
     <xsl:variable name="url">
         <xsl:if test="preceding-sibling::*">
@@ -10569,8 +10616,8 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
     </xsl:variable>
     <xsl:choose>
         <xsl:when test="$url=''">
-            <!-- Go up to parent and get the URL there (not recursive)    -->
-            <!-- parent always exists, since <mathbook> is non-structural -->
+            <!-- Go up to parent and get the URL there (not recursive)   -->
+            <!-- parent always exists, since <pretext> is non-structural -->
             <xsl:variable name="parent" select="parent::*[1]" />
             <xsl:variable name="structural">
                 <xsl:apply-templates select="$parent" mode="is-structural" />
@@ -11072,7 +11119,7 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
                     <xsl:if test="$docinfo/feedback">
                         <xsl:call-template name="feedback-link" />
                     </xsl:if>
-                    <xsl:call-template name="mathbook-link" />
+                    <xsl:call-template name="pretext-link" />
                     <xsl:call-template name="powered-by-mathjax" />
                 </nav>
             </div>
@@ -11284,8 +11331,8 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
 
 <!-- Branding in "extras", mostly hard-coded        -->
 <!-- HTTPS for authors delivering from secure sites -->
-<xsl:template name="mathbook-link">
-    <a class="mathbook-link" href="https://pretextbook.org">
+<xsl:template name="pretext-link">
+    <a class="pretext-link" href="https://pretextbook.org">
         <xsl:call-template name="type-name">
             <xsl:with-param name="string-id" select="'authored'" />
         </xsl:call-template>
@@ -11691,8 +11738,8 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
     </xsl:if>
 </xsl:template>
 
-<!-- Mathbook Javascript header -->
-<xsl:template name="mathbook-js">
+<!-- PreTeXt Javascript header -->
+<xsl:template name="pretext-js">
     <!-- condition first on toc present? -->
     <script src="{$html.js.server}/js/lib/jquery.min.js"></script>
     <script src="{$html.js.server}/js/lib/jquery.sticky.js" ></script>
@@ -11814,10 +11861,12 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
                 <xsl:text>latex-macros</xsl:text>
             </xsl:attribute>
         </xsl:if>
-        <xsl:call-template name="begin-inline-math" />
-        <xsl:value-of select="$latex-packages-mathjax" />
-        <xsl:value-of select="$latex-macros" />
-        <xsl:call-template name="end-inline-math" />
+        <xsl:call-template name="inline-math-wrapper">
+            <xsl:with-param name="math">
+                <xsl:value-of select="$latex-packages-mathjax"/>
+                <xsl:value-of select="$latex-macros"/>
+            </xsl:with-param>
+        </xsl:call-template>
     </div>
 </xsl:template>
 

@@ -139,6 +139,7 @@ along with PreTeXt.  If not, see <http://www.gnu.org/licenses/>.
     <!-- Literate programming, a chunk of computer code -->
     <!-- <localization string-id='fragment'>Fragment</localization> -->
     <!-- Parts of an exercise and its solution -->
+    <!-- See the en-US file for a detailed explanation of the words for exercises -->
     <localization string-id='divisionalexercise'>Exercice</localization>
     <!-- Translation needed for France French -->
     <!-- See en-US file for distinctions here, do not repeat previous translation -->
@@ -149,6 +150,8 @@ along with PreTeXt.  If not, see <http://www.gnu.org/licenses/>.
     <localization string-id='hint'>Indication</localization>
     <localization string-id='answer'>Réponse</localization>
     <localization string-id='solution'>Solution</localization>
+    <!-- A group of divisional exercises (with introduction and conclusion) -->
+    <localization string-id='exercisegroup'>Groupe d'exercices</localization>
      <!-- Front matter components -->
     <localization string-id='toc'>Table des matières</localization>
     <localization string-id='abstract'>Résumé</localization>

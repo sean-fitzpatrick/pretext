@@ -123,6 +123,8 @@
         <p>You can also place an <q>anonymous</q> image (no caption, no number) almost anywhere you might place a paragraph (but not <em>within</em> a paragraph).  Note also that the <tag>sidebyside</tag> tag provides some very flexible options for placing several images (<xref ref="overview-sidebyside" />) together, or combining figures with subcaptions.</p>
 
         <p>If you wish to construct technical diagrams, with editable source, and perhaps including the use of <latex/> macros, <pretext/> provides support for authoring with graphics languages such as Asymptote, TikZ, PGF, PSTricks, and xy-pic in addition to using Sage code to describe a plot or image.  In most cases output can be obtained as smoothly-scalable <init>SVG</init> images, in addition to other formats like <init>PDF</init> or <init>PNG</init>.  Making all this happen is one of the more technical aspects of <pretext/>, so read the details in <xref ref="topic-images"/> along with frequent references there to the <c>pretext</c> script described in <xref ref="pretext-script"/>.</p>
+
+        <p>For accessibility, every <tag>image</tag> should either have a <tag>description</tag> child, or it should explicitly declare itself to be a decorative image setting <attr>decorative</attr> to the value <c>yes</c>. A description should minimally describe the important information in the image that is not already present in the surrounding text. Some screen readers may cut off reading a full descritption after the first 125 characters. For a complex technical diagram or an image from which the reader is expected to extract important information on their own, it can be challenging to write a description with the 125-character limit. It may be advisable to seek advice from an expert.</p>
     </section>
 
     <section xml:id="overview-lists">
@@ -169,7 +171,7 @@
 
         <p>An inline exercise typically gets a fully qualified unique number and is rendered similar to an <tag>example</tag> or a <tag>remark</tag>.  A divisional exercise (including reading questions and worksheet exercises) only gets a sequential number, though this can be overridden with the <attr>number</attr> attribute if you want to maintain stable numbering in response to edits.  (Be careful, once you override the sequential numbering, you probably need to manually specify every subsequent number, so save overrides for when your project matures.)</p>
 
-        <p>Within a run of divisional exercises a subgroup can be delimited as an <tag>exercisegroup</tag>, which allows an <tag>introduction</tag> and/or <tag>conclusion</tag> to explain some commonality.  An <tag>exercisegroup</tag> should be rendered in some way that makes it clear to the reader that they are a group.</p>
+        <p>Within a run of divisional exercises a subgroup can be delimited as an <tag>exercisegroup</tag>, which requires an <tag>introduction</tag> and allows a <tag>conclusion</tag> to explain some commonality.  A <tag>title</tag> is optional, and a default will be provided otherwise.  An <tag>exercisegroup</tag> should be rendered in some way that makes it clear to the reader that they are a group.</p>
     </section>
 
     <section xml:id="overview-worksheet">

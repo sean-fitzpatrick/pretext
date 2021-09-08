@@ -1397,8 +1397,8 @@ Book (with parts), "section" at level 3
 <!--                                                     -->
 <!-- Abstract Templates                                  -->
 <!--                                                     -->
-<!-- (1) begin-inline-math, end-inline-math              -->
-<!--       The delimiters for inline mathematics         -->
+<!-- (1) named "inline-math-wrapper"                     -->
+<!--       Provides the delimiters for inline math       -->
 <!--       Stub warnings follow below                    -->
 <!-- (2) get-clause-punctuation                          -->
 <!--       Look at next node, and if a text node,        -->
@@ -1409,57 +1409,59 @@ Book (with parts), "section" at level 3
 <!-- $debug.displaystyle defaults to yes for testing -->
 
 <xsl:template match="m">
-    <!-- Build a textual version of the latex,  -->
-    <!-- applying the rare templates allowed,   -->
-    <!-- save for minor manipulation later.     -->
-    <!-- Note: generic text() template here in  -->
-    <!-- -common should always pass through the -->
-    <!-- text nodes within "m" with no changes  -->
-    <xsl:variable name="raw-latex">
-        <xsl:choose>
-            <xsl:when test="ancestor::static/parent::webwork-reps">
-                <xsl:apply-templates select="text()|var" />
-            </xsl:when>
-            <xsl:otherwise>
-                <xsl:apply-templates select="text()|fillin" />
-            </xsl:otherwise>
-        </xsl:choose>
-        <!-- look ahead to absorb immediate clause-ending punctuation   -->
-        <!-- this is useful for HTML/MathJax to prevent bad line breaks -->
-        <!-- The template here in -common is generally useful, but      -->
-        <!-- for LaTeX we override to be a no-op, since not necessary   -->
-        <xsl:apply-templates select="." mode="get-clause-punctuation" />
-    </xsl:variable>
-    <!-- wrap tightly in math delimiters -->
-    <xsl:call-template name="begin-inline-math" />
-    <!-- Prefix will normally be empty and have no effect.  We also have  -->
-    <!-- an undocumented switch to totally kill the possibility entirely. -->
-    <!-- This was added to support testing of braille output.             -->
-    <xsl:if test="not($debug.displaystyle = 'no')">
-        <xsl:apply-templates select="."  mode="display-style-prefix"/>
-    </xsl:if>
-    <!-- we clean whitespace that is irrelevant to LaTeX so that we -->
-    <!--   (1) avoid LaTeX compilation errors                       -->
-    <!--   (2) avoid spurious blank lines leading to new paragraphs -->
-    <!--   (3) provide human-readable source of high quality        -->
-    <!-- sanitize-latex template does not provide a final newline   -->
-    <!-- and we do not add one here either, since it is inline math -->
-    <!-- MathJax is more tolerant, but readability is still useful  -->
-    <xsl:call-template name="sanitize-latex">
-        <xsl:with-param name="text" select="$raw-latex" />
+    <!-- wrap in math delimiters -->
+    <xsl:call-template name="inline-math-wrapper">
+        <xsl:with-param name="math">
+            <!-- Build a textual version of the latex,  -->
+            <!-- applying the rare templates allowed,   -->
+            <!-- save for minor manipulation later.     -->
+            <!-- Note: generic text() template here in  -->
+            <!-- -common should always pass through the -->
+            <!-- text nodes within "m" with no changes  -->
+            <xsl:variable name="raw-latex">
+                <xsl:choose>
+                    <xsl:when test="ancestor::static/parent::webwork-reps">
+                        <xsl:apply-templates select="text()|var" />
+                    </xsl:when>
+                    <xsl:otherwise>
+                        <xsl:apply-templates select="text()|fillin" />
+                    </xsl:otherwise>
+                </xsl:choose>
+                <!-- look ahead to absorb immediate clause-ending punctuation   -->
+                <!-- this is useful for HTML/MathJax to prevent bad line breaks -->
+                <!-- The template here in -common is generally useful, but      -->
+                <!-- for LaTeX we override to be a no-op, since not necessary   -->
+                <xsl:apply-templates select="." mode="get-clause-punctuation" />
+            </xsl:variable>
+            <!-- Prefix will normally be empty and have no effect.  We also have  -->
+            <!-- an undocumented switch to totally kill the possibility entirely. -->
+            <!-- This was added to support testing of braille output.             -->
+            <xsl:if test="not($debug.displaystyle = 'no')">
+                <xsl:apply-templates select="."  mode="display-style-prefix"/>
+            </xsl:if>
+            <!-- we clean whitespace that is irrelevant to LaTeX so that we -->
+            <!--   (1) avoid LaTeX compilation errors                       -->
+            <!--   (2) avoid spurious blank lines leading to new paragraphs -->
+            <!--   (3) provide human-readable source of high quality        -->
+            <!-- sanitize-latex template does not provide a final newline   -->
+            <!-- and we do not add one here either, since it is inline math -->
+            <!-- MathJax is more tolerant, but readability is still useful  -->
+            <xsl:call-template name="sanitize-latex">
+                <xsl:with-param name="text" select="$raw-latex" />
+            </xsl:call-template>
+        </xsl:with-param>
     </xsl:call-template>
-    <xsl:call-template name="end-inline-math" />
 </xsl:template>
 
-<xsl:template name="begin-inline-math">
-     <xsl:message>PTX:ERROR:   the "begin-inline-math" template needs an implementation in the current conversion</xsl:message>
-     <xsl:text>[[[</xsl:text>
- </xsl:template>
+<!-- This template needs an override in each output mode. -->
+<xsl:template name="inline-math-wrapper">
+    <xsl:param name="math"/>
+    <xsl:message>PTX:ERROR:   the "wrapper" modal template for inline math needs an implementation in the current conversion</xsl:message>
+    <xsl:text>[[[</xsl:text>
+    <xsl:value-of select="$math"/>
+    <xsl:text>]]]</xsl:text>
+</xsl:template>
 
-<xsl:template name="end-inline-math">
-     <xsl:message>PTX:ERROR:   the "end-inline-math" template needs an implementation in the current conversion</xsl:message>
-     <xsl:text>]]]</xsl:text>
- </xsl:template>
 
 <!-- Display Style LaTeX markup for inline math -->
 <!--                                                     -->
@@ -1992,50 +1994,52 @@ Book (with parts), "section" at level 3
 <!-- the textcomp package, then math delimiters will    -->
 <!-- move down into the "when" parts of the "choose"    -->
 <xsl:template match="@tag" mode="tag-symbol">
-    <xsl:call-template name="begin-inline-math" />
-    <xsl:choose>
-        <!-- Stars -->
-        <xsl:when test=". = 'star'">
-            <xsl:text>\star</xsl:text>
-        </xsl:when>
-        <xsl:when test=". = 'dstar'">
-            <xsl:text>\star\star</xsl:text>
-        </xsl:when>
-        <xsl:when test=". = 'tstar'">
-            <xsl:text>\star\star\star</xsl:text>
-        </xsl:when>
-        <!-- Dagger -->
-        <xsl:when test=". = 'dagger'">
-            <xsl:text>\dagger</xsl:text>
-        </xsl:when>
-        <xsl:when test=". = 'ddagger'">
-            <xsl:text>\dagger\dagger</xsl:text>
-        </xsl:when>
-        <xsl:when test=". = 'tdagger'">
-            <xsl:text>\dagger\dagger\dagger</xsl:text>
-        </xsl:when>
-        <!-- Hash -->
-        <xsl:when test=". = 'hash'">
-            <xsl:text>\#</xsl:text>
-        </xsl:when>
-        <xsl:when test=". = 'dhash'">
-            <xsl:text>\#\#</xsl:text>
-        </xsl:when>
-        <xsl:when test=". = 'thash'">
-            <xsl:text>\#\#\#</xsl:text>
-        </xsl:when>
-        <!-- Maltese -->
-        <xsl:when test=". = 'maltese'">
-            <xsl:text>\maltese</xsl:text>
-        </xsl:when>
-        <xsl:when test=". = 'dmaltese'">
-            <xsl:text>\maltese\maltese</xsl:text>
-        </xsl:when>
-        <xsl:when test=". = 'tmaltese'">
-            <xsl:text>\maltese\maltese\maltese</xsl:text>
-        </xsl:when>
-    </xsl:choose>
-    <xsl:call-template name="end-inline-math" />
+    <xsl:call-template name="inline-math-wrapper">
+        <xsl:with-param name="math">
+            <xsl:choose>
+                <!-- Stars -->
+                <xsl:when test=". = 'star'">
+                    <xsl:text>\star</xsl:text>
+                </xsl:when>
+                <xsl:when test=". = 'dstar'">
+                    <xsl:text>\star\star</xsl:text>
+                </xsl:when>
+                <xsl:when test=". = 'tstar'">
+                    <xsl:text>\star\star\star</xsl:text>
+                </xsl:when>
+                <!-- Dagger -->
+                <xsl:when test=". = 'dagger'">
+                    <xsl:text>\dagger</xsl:text>
+                </xsl:when>
+                <xsl:when test=". = 'ddagger'">
+                    <xsl:text>\dagger\dagger</xsl:text>
+                </xsl:when>
+                <xsl:when test=". = 'tdagger'">
+                    <xsl:text>\dagger\dagger\dagger</xsl:text>
+                </xsl:when>
+                <!-- Hash -->
+                <xsl:when test=". = 'hash'">
+                    <xsl:text>\#</xsl:text>
+                </xsl:when>
+                <xsl:when test=". = 'dhash'">
+                    <xsl:text>\#\#</xsl:text>
+                </xsl:when>
+                <xsl:when test=". = 'thash'">
+                    <xsl:text>\#\#\#</xsl:text>
+                </xsl:when>
+                <!-- Maltese -->
+                <xsl:when test=". = 'maltese'">
+                    <xsl:text>\maltese</xsl:text>
+                </xsl:when>
+                <xsl:when test=". = 'dmaltese'">
+                    <xsl:text>\maltese\maltese</xsl:text>
+                </xsl:when>
+                <xsl:when test=". = 'tmaltese'">
+                    <xsl:text>\maltese\maltese\maltese</xsl:text>
+                </xsl:when>
+            </xsl:choose>
+        </xsl:with-param>
+    </xsl:call-template>
 </xsl:template>
 
 <!-- Intertext -->
@@ -3690,7 +3694,7 @@ Neither: A structural node that is simply a (visual) subdivision of a chunk
 <!-- Some items have default titles that make sense         -->
 <!-- Typically these are one-off subdivisions (eg preface), -->
 <!-- or repeated generic divisions (eg exercises)           -->
-<xsl:template match="frontmatter|colophon|preface|foreword|acknowledgement|dedication|biography|references|glossary|exercises|worksheet|reading-questions|solutions|backmatter|index-part|index[index-list]|case" mode="has-default-title">
+<xsl:template match="frontmatter|colophon|preface|foreword|acknowledgement|dedication|biography|references|glossary|exercises|worksheet|reading-questions|exercisegroup|solutions|backmatter|index-part|index[index-list]|case" mode="has-default-title">
     <xsl:text>true</xsl:text>
 </xsl:template>
 <xsl:template match="*" mode="has-default-title">
@@ -3885,7 +3889,7 @@ Neither: A structural node that is simply a (visual) subdivision of a chunk
     <xsl:value-of select="true()"/>
 </xsl:template>
 <!-- Miscellaneous -->
-<xsl:template match="paragraphs|proof|case|defined-term" mode="title-wants-punctuation">
+<xsl:template match="paragraphs|proof|case|defined-term|exercisegroup" mode="title-wants-punctuation">
     <xsl:value-of select="true()"/>
 </xsl:template>
 <!-- Titled: list items, tasks of exercise, PROJECT-LIKE, EXAMPLE-LIKE -->
@@ -7365,11 +7369,13 @@ Neither: A structural node that is simply a (visual) subdivision of a chunk
     </xsl:apply-templates>
 </xsl:template>
 
-<!-- This template is called for items in a worksheet that can have work space       -->
-<!-- terminal task of an activity-like that have a @workspace attribute. -->
+<!-- This template is called for items in a worksheet that can have a  -->
+<!-- workspace specified.  It is important that this sometimes returns -->
+<!-- an empty string, since that is a signal to not construct some     -->
+<!-- surrounding infrastructure to implement the necessary space.      -->
 <xsl:template match="&PROJECT-LIKE;|exercise|task" mode="sanitize-workspace">
-    <!-- bail out quickly and empty if not on a worksheet -->
-    <!-- bail out if structured, and not yet terminal     -->
+    <!-- bail out quickly and empty if not on a worksheet    -->
+    <!-- bail out if at a "task" that is not a terminal task -->
     <xsl:if test="ancestor::worksheet and not(child::task)">
         <!-- First element with @workspace, confined to the worksheet  -->
         <!-- Could be empty node-set, which will be empty string later -->
@@ -7892,7 +7898,9 @@ Neither: A structural node that is simply a (visual) subdivision of a chunk
     <xsl:call-template name="list-of-begin" />
     <!-- recursive procedure, starting from indicated scope -->
     <xsl:apply-templates select="$subroot" mode="list-of-content">
-        <xsl:with-param name="heading-level" select="$heading-level"/>
+        <!-- list-of was passed a heading level that was incremented by its parent division -->
+        <!-- Since the list-of has no heading itself, we back this up by 1                  -->
+        <xsl:with-param name="heading-level" select="$heading-level - 1"/>
         <xsl:with-param name="elements" select="$elements"/>
         <xsl:with-param name="divisions" select="$divisions"/>
         <xsl:with-param name="b-empty" select="$b-empty"/>
@@ -8257,9 +8265,17 @@ Neither: A structural node that is simply a (visual) subdivision of a chunk
 <!-- Music -->
 <!-- ##### -->
 
+<!-- Uses inline math rendering -->
+<xsl:template match="n|scaledeg|timesignature|chord">
+    <xsl:call-template name="inline-math-wrapper">
+        <xsl:with-param name="math">
+            <xsl:apply-templates select="." mode="inner-music"/>
+        </xsl:with-param>
+    </xsl:call-template>
+</xsl:template>
+
 <!-- Note -->
-<xsl:template match="n">
-    <xsl:call-template name="begin-inline-math"/>
+<xsl:template match="n" mode="inner-music">
     <!-- Test that pitch class is NOT castable as a number -->
     <xsl:if test="not(number(@pc) = number(@pc))">
         <xsl:text>\text{</xsl:text>
@@ -8292,35 +8308,29 @@ Neither: A structural node that is simply a (visual) subdivision of a chunk
         <xsl:value-of select="@octave"/>
         <xsl:text>}</xsl:text>
     </xsl:if>
-    <xsl:call-template name="end-inline-math"/>
 </xsl:template>
 
 <!-- Scale Degrees -->
-<xsl:template match="scaledeg">
+<xsl:template match="scaledeg" mode="inner-music">
     <!-- Arabic numeral with circumflex accent above)-->
-    <xsl:call-template name="begin-inline-math"/>
     <xsl:text>\hat{</xsl:text>
     <xsl:apply-templates/>
     <xsl:text>}</xsl:text>
-    <xsl:call-template name="end-inline-math"/>
     <!-- TODO: unclear if trailing space is necessary -->
     <xsl:text> </xsl:text>
 </xsl:template>
 
 <!-- Time Signatures -->
-<xsl:template match="timesignature">
-    <xsl:call-template name="begin-inline-math"/>
+<xsl:template match="timesignature" mode="inner-music">
     <xsl:text>\begin{smallmatrix}</xsl:text>
     <xsl:value-of select="@top"/>
     <xsl:text>\\</xsl:text>
     <xsl:value-of select="@bottom"/>
     <xsl:text>\end{smallmatrix}</xsl:text>
-    <xsl:call-template name="end-inline-math"/>
 </xsl:template>
 
 <!-- Chord -->
-<xsl:template match="chord">
-    <xsl:call-template name="begin-inline-math"/>
+<xsl:template match="chord" mode="inner-music">
     <xsl:text>\left.</xsl:text>
     <!-- Root -->
     <xsl:choose>
@@ -8456,7 +8466,6 @@ Neither: A structural node that is simply a (visual) subdivision of a chunk
         </xsl:choose>
     </xsl:if>
     <xsl:text>\right.</xsl:text>
-    <xsl:call-template name="end-inline-math"/>
 </xsl:template>
 
 <!-- Chord Alteration -->

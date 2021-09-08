@@ -1514,11 +1514,24 @@
     <xsl:value-of select="@pg-name"/>
     <xsl:text>), width=&gt;</xsl:text>
     <xsl:value-of select="substring-before($width, '%') div 100 * $design-width-pg"/>
-    <xsl:if test="description">
-        <xsl:text>, extra_html_tags=&gt;qq!alt="</xsl:text>
-        <xsl:apply-templates select="description" />
-        <xsl:text>"!</xsl:text>
-    </xsl:if>
+    <!-- alt attribute for accessibility -->
+    <xsl:choose>
+        <xsl:when test="@decorative = 'yes'">
+            <xsl:text>, alt=&gt;""</xsl:text>
+        </xsl:when>
+        <xsl:when test="not(string(description) = '')">
+            <xsl:variable name="delimiter">
+                <xsl:call-template name="find-unused-character">
+                    <xsl:with-param name="string" select="description"/>
+                    <xsl:with-param name="charset" select="concat('&quot;|/\?:;.,=+-_~`!^&amp;*',&SIMPLECHAR;)"/>
+                </xsl:call-template>
+            </xsl:variable>
+            <xsl:text>, alt=&gt;qq</xsl:text>
+            <xsl:value-of select="$delimiter"/>
+            <xsl:apply-templates select="description" />
+            <xsl:value-of select="$delimiter"/>
+        </xsl:when>
+    </xsl:choose>
     <xsl:text>)@]* </xsl:text>
 </xsl:template>
 
@@ -1534,18 +1547,24 @@
     <xsl:value-of select="$pg-name"/>
     <xsl:text>), width=&gt;</xsl:text>
     <xsl:value-of select="substring-before($width, '%') div 100 * $design-width-pg"/>
-    <xsl:if test="description">
-        <xsl:variable name="delimiter">
-            <xsl:call-template name="find-unused-character">
-                <xsl:with-param name="string" select="description"/>
-                <xsl:with-param name="charset" select="concat('&quot;|/\?:;.,=+-_~`!^&amp;*',&SIMPLECHAR;)"/>
-            </xsl:call-template>
-        </xsl:variable>
-        <xsl:text>, alt=&gt;qq</xsl:text>
-        <xsl:value-of select="$delimiter"/>
-        <xsl:apply-templates select="description" />
-        <xsl:value-of select="$delimiter"/>
-    </xsl:if>
+    <!-- alt attribute for accessibility -->
+    <xsl:choose>
+        <xsl:when test="@decorative = 'yes'">
+            <xsl:text>, alt=&gt;""</xsl:text>
+        </xsl:when>
+        <xsl:when test="not(string(description) = '')">
+            <xsl:variable name="delimiter">
+                <xsl:call-template name="find-unused-character">
+                    <xsl:with-param name="string" select="description"/>
+                    <xsl:with-param name="charset" select="concat('&quot;|/\?:;.,=+-_~`!^&amp;*',&SIMPLECHAR;)"/>
+                </xsl:call-template>
+            </xsl:variable>
+            <xsl:text>, alt=&gt;qq</xsl:text>
+            <xsl:value-of select="$delimiter"/>
+            <xsl:apply-templates select="description" />
+            <xsl:value-of select="$delimiter"/>
+        </xsl:when>
+    </xsl:choose>
     <xsl:text>)@]* </xsl:text>
 </xsl:template>
 
@@ -1856,7 +1875,7 @@
         <!-- pass the enclosing environment (md) as the context       -->
         <xsl:apply-templates select="parent::md" mode="get-clause-punctuation" />
     </xsl:if>
-    <!-- PG cannot actually mirror LaTeX intertext funcitonality. As  -->
+    <!-- PG cannot actually mirror LaTeX intertext functionality. As  -->
     <!-- a consequence, we should not line break an mrow that         -->
     <!-- immediately preceds an intertext.                            -->
     <xsl:if test="following-sibling::mrow and not(following-sibling::*[1][self::intertext])">
