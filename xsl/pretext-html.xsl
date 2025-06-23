@@ -6167,6 +6167,8 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
         <a href="{$image-html-url}">Link to full-sized image</a>
       </div>
     </xsl:if>
+    <!-- possibly give a long description -->
+    <xsl:apply-templates select="." mode="description"/>
 </xsl:template>
 
 <!-- The infrastructure for an SVG or PNG image      -->
