@@ -6150,7 +6150,13 @@ along with MathBook XML.  If not, see <http://www.gnu.org/licenses/>.
     <!-- will provide an overall width.  The "padding-top" property is what -->
     <!-- makes the right shape.  CSS provides some constant properties.     -->
     <div class="asymptote-box" style="padding-top: {$aspect-percent}%">
-        <iframe src="{$html-filename}" class="asymptote"/>
+        <iframe src="{$html-filename}" class="asymptote">
+            <xsl:if test="shortdescription">
+                <xsl:attribute name="title">
+                    <xsl:apply-templates select="shortdescription"/>
+                </xsl:attribute>
+            </xsl:if>
+        </iframe>
     </div>
     <!-- possibly annotate with archive links -->
     <xsl:apply-templates select="." mode="archive">
